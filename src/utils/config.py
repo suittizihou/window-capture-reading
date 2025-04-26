@@ -26,6 +26,14 @@ def load_config() -> Dict[str, str]:
         "BOUYOMI_PORT": os.getenv("BOUYOMI_PORT", "50001"),
         "LOG_LEVEL": os.getenv("LOG_LEVEL", "INFO"),
         "LOG_FILE": os.getenv("LOG_FILE", "app.log"),
+        # Tesseract OCR設定
+        "TESSERACT_PATH": os.getenv("TESSERACT_PATH", ""),
+        "OCR_LANGUAGE": os.getenv("OCR_LANGUAGE", "jpn"),
+        "OCR_CONFIG": os.getenv("OCR_CONFIG", "--psm 6"),
+        # メッセージ検出設定
+        "MAX_MESSAGE_CACHE": os.getenv("MAX_MESSAGE_CACHE", "1000"),
+        "CACHE_CLEAN_THRESHOLD": os.getenv("CACHE_CLEAN_THRESHOLD", "1200"),
+        "MIN_MESSAGE_LENGTH": os.getenv("MIN_MESSAGE_LENGTH", "2"),
     }
     
     return config
