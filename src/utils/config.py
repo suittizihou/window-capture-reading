@@ -20,20 +20,38 @@ def load_config() -> Dict[str, str]:
     
     # 必要な設定値を取得
     config = {
+        # ウィンドウ設定
         "TARGET_WINDOW_TITLE": os.getenv("TARGET_WINDOW_TITLE", "LDPlayer"),
+        
+        # キャプチャ設定
         "CAPTURE_INTERVAL": os.getenv("CAPTURE_INTERVAL", "1.0"),
-        "BOUYOMI_HOST": os.getenv("BOUYOMI_HOST", "127.0.0.1"),
-        "BOUYOMI_PORT": os.getenv("BOUYOMI_PORT", "50001"),
-        "LOG_LEVEL": os.getenv("LOG_LEVEL", "INFO"),
-        "LOG_FILE": os.getenv("LOG_FILE", "app.log"),
-        # Tesseract OCR設定
-        "TESSERACT_PATH": os.getenv("TESSERACT_PATH", ""),
+        
+        # OCR設定
+        "TESSERACT_PATH": os.getenv("TESSERACT_PATH", r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
         "OCR_LANGUAGE": os.getenv("OCR_LANGUAGE", "jpn"),
         "OCR_CONFIG": os.getenv("OCR_CONFIG", "--psm 6"),
+        "OCR_PREPROCESSING_ENABLED": os.getenv("OCR_PREPROCESSING_ENABLED", "True"),
+        
+        # 棒読みちゃん設定
+        "BOUYOMI_HOST": os.getenv("BOUYOMI_HOST", "127.0.0.1"),
+        "BOUYOMI_PORT": os.getenv("BOUYOMI_PORT", "50001"),
+        
         # メッセージ検出設定
         "MAX_MESSAGE_CACHE": os.getenv("MAX_MESSAGE_CACHE", "1000"),
         "CACHE_CLEAN_THRESHOLD": os.getenv("CACHE_CLEAN_THRESHOLD", "1200"),
         "MIN_MESSAGE_LENGTH": os.getenv("MIN_MESSAGE_LENGTH", "2"),
+        
+        # 棒読みちゃん設定（拡張）
+        "BOUYOMI_ENABLED": os.getenv("BOUYOMI_ENABLED", "true"),
+        "BOUYOMI_RETRY_INTERVAL": os.getenv("BOUYOMI_RETRY_INTERVAL", "5"),
+        "BOUYOMI_VOICE_TYPE": os.getenv("BOUYOMI_VOICE_TYPE", "0"),
+        "BOUYOMI_VOICE_SPEED": os.getenv("BOUYOMI_VOICE_SPEED", "-1"),
+        "BOUYOMI_VOICE_TONE": os.getenv("BOUYOMI_VOICE_TONE", "-1"),
+        "BOUYOMI_VOICE_VOLUME": os.getenv("BOUYOMI_VOICE_VOLUME", "-1"),
+        
+        # ログ設定
+        "LOG_LEVEL": os.getenv("LOG_LEVEL", "INFO"),
+        "LOG_FILE": os.getenv("LOG_FILE", "app.log"),
     }
     
     return config
