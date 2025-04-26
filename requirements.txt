@@ -1,23 +1,22 @@
-# 画像処理
+# Image processing
 Pillow==10.2.0
 opencv-python==4.9.0.80
 
 # OCR
 pytesseract==0.3.10
 
-# 環境変数
+# Environment variables
 python-dotenv==1.0.1
 
-# 型チェック
+# Type checking
 mypy==1.9.0
 types-Pillow==10.2.0.20240324
-types-opencv-python==4.9.0.20240324
 
-# テスト
+# Testing
 pytest==8.0.2
 pytest-cov==4.1.0
 
-# リンター
+# Linting
 black==24.2.0
 isort==5.13.2
 flake8==7.0.0
