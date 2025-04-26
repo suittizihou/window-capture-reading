@@ -174,5 +174,4 @@ cython_debug/
 .pypirc
 
 # Cursor MCP Server related
-.mcp/
-.mcpconfig
+.cursor/mcp.json

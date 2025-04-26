@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+MCP Server configuration for this project:
+
+- Owner: `suittizihou`
+- Repository: `window-capture-reading`
+
+
+When generating any MCP Server related references, requests, or configurations, always use the above owner and repository names unless explicitly specified otherwise.
