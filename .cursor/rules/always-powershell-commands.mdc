@@ -1,0 +1,16 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+When suggesting or writing any terminal commands, always assume the user is using **Windows PowerShell** as the terminal environment.
+
+- Prefer PowerShell-specific syntax where necessary.
+- Avoid Linux or Unix shell syntax unless explicitly requested.
+- Example: use `dir` or `Get-ChildItem` instead of `ls`, `Remove-Item` instead of `rm`, `Move-Item` instead of `mv`.
+- When writing multi-line commands, use PowerShell continuation characters (`\` at the end of lines) if needed.
+- When setting environment variables, use `$env:VAR_NAME = "value"` style, not `export VAR_NAME=value`.
+- Commands must be executable as-is in PowerShell without modifications.
+
+
+Always optimize command outputs and examples for Windows PowerShell users.
