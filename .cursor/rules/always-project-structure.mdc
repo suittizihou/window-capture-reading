@@ -1,0 +1,18 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Organize the project into the following clear structure:
+
+- `src/` contains the application code.
+  - Structure it into `services/` (business logic) and `utils/` (utilities).
+- `tests/` mirrors the structure of `src/` and contains unit tests.
+- `docs/` stores documentation materials.
+- `config/` stores configuration and environment files.
+- `resources/` stores static files (e.g., images).
+
+Include `__init__.py` files where needed.
+
+Configuration should be managed using environment variables.
+

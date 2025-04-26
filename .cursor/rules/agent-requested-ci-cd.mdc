@@ -1,0 +1,11 @@
+---
+description: Guidelines for setting up CI/CD using GitHub Actions.
+globs: 
+alwaysApply: false
+---
+Implement GitHub Actions workflows to:
+
+- Run Ruff for lint checking.
+- Execute pytest for testing.
+
+- GitHub Actions usage is free for public repositories.

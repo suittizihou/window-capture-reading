@@ -1,0 +1,12 @@
+---
+description: Guidelines for writing documentation and docstrings.
+globs: 
+alwaysApply: false
+---
+Maintain excellent documentation practices:
+
+- Provide clear, comprehensive README files.
+- Write meaningful inline documentation for non-trivial code sections.
+- Include descriptive examples and context in all docstrings.
+
+- Follow PEP257 standards for all docstrings.

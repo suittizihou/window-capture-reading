@@ -1,0 +1,10 @@
+---
+description: Guidelines for managing dependencies using Rye or virtual environments.
+globs: 
+alwaysApply: false
+---
+Manage Python dependencies with:
+
+- [Rye](https://github.com/astral-sh/rye) or a standard virtual environment.
+
+- Pin all dependencies clearly in `requirements.txt` or `pyproject.toml`.

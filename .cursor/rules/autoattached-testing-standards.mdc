@@ -1,0 +1,23 @@
+---
+description: 
+globs: tests/**
+alwaysApply: false
+---
+For all files under `tests/`:
+
+- Only use `pytest` and related plugins (do not use `unittest`).
+- Mirror the structure of `src/` under `tests/`.
+- Ensure every test file contains an `__init__.py`.
+- All tests must be fully type-annotated.
+- All tests must include descriptive docstrings.
+
+If TYPE_CHECKING is required, import:
+
+```python
+from _pytest.capture import CaptureFixture
+from _pytest.fixtures import FixtureRequest
+from _pytest.logging import LogCaptureFixture
+from _pytest.monkeypatch import MonkeyPatch
+from pytest_mock.plugin import MockerFixture
+
+---

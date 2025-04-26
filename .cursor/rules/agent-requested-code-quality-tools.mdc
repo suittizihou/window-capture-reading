@@ -1,0 +1,11 @@
+---
+description: Guidelines for maintaining code quality and style.
+globs: 
+alwaysApply: false
+---
+Maintain high code quality by:
+
+- Using Ruff to enforce linting and formatting.
+- Following Black's style guide (88 character line limit).
+
+- Optionally using Mypy or Pyright for static type checking.

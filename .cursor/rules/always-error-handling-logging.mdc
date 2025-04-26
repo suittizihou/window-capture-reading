@@ -1,0 +1,11 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Ensure robust error handling and logging:
+
+- Always capture rich context information when logging exceptions.
+- Never expose sensitive information in logs.
+
+- Use a centralized `logger.py` for consistent logging setup across the project.

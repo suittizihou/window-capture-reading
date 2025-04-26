@@ -1,0 +1,20 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Follow strict coding standards:
+
+- Adhere to PEP8 for code formatting.
+- Follow PEP257 for docstring conventions.
+- Use 4 spaces per indentation level (no tabs).
+- Keep lines within 88 characters whenever possible.
+- Use `snake_case` for variables and functions.
+- Use `PascalCase` for class names.
+- Use `UPPER_CASE_WITH_UNDERSCORES` for constants.
+- Every function and class must have full type annotations.
+- Every function and class must have a descriptive docstring.
+- Always update outdated docstrings when modifying existing code.
+- Preserve and respect all existing comments.
+- Write AI-friendly code with clear naming and descriptive comments.
+
