@@ -188,7 +188,12 @@ def main(window_title: Optional[str] = None) -> None:
             for key, _, _ in settings_keys:
                 config[key] = entries[key].get()
             config.save()
-            messagebox.showinfo('情報', '設定を保存しました。再起動で反映されます。')
+            # タイトルラベルを即時更新
+            title_var.set(f'ターゲットウィンドウ: {config.get("TARGET_WINDOW_TITLE", "(未設定)")}')
+            # OCRスレッドを再起動して設定を即時反映
+            on_stop()
+            on_start()
+            messagebox.showinfo('情報', '設定を保存し即時反映しました。')
             dialog.destroy()
         def on_cancel():
             dialog.destroy()
