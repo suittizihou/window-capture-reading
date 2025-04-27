@@ -573,6 +573,37 @@ def main(window_title: Optional[str] = None) -> None:
     exit_button.grid(row=0, column=2, padx=10)
     settings_button = tk.Button(button_frame, text='設定', width=10, command=show_settings_dialog)
     settings_button.grid(row=0, column=3, padx=10)
+    latest_ocr_text = {'text': ''}  # 最新のOCRテキストを辞書で保持
+    def on_capture_ocr():
+        """現在のウィンドウ画像をキャプチャし、OCRでテキストを抽出して保存する。"""
+        from src.services.ocr_service import OCRService
+        from src.utils.config import Config
+        config = Config()
+        window_name = window_title or config.get("TARGET_WINDOW_TITLE", "LDPlayer")
+        window_capture = WindowCapture(window_name)
+        ocr_service = OCRService(config)
+        frame = window_capture.capture()
+        if frame is not None:
+            # --- Startボタンと同じく上下反転 ---
+            frame = frame.transpose(Image.FLIP_TOP_BOTTOM)
+            # ROIでクロップ
+            crop_img = frame
+            roi_now = roi if roi is not None else None
+            if roi_now is not None:
+                x1, y1, x2, y2 = [int(round(v)) for v in roi_now]
+                x1 = max(0, min(x1, frame.width-1))
+                y1 = max(0, min(y1, frame.height-1))
+                x2 = max(0, min(x2, frame.width))
+                y2 = max(0, min(y2, frame.height))
+                if x2 > x1 and y2 > y1:
+                    crop_img = frame.crop((x1, y1, x2, y2))
+            text = ocr_service.extract_text(crop_img)
+            latest_ocr_text['text'] = text or ''
+            ocr_text_var.set(text or 'まだテキストは検出されていません')
+        else:
+            messagebox.showerror('エラー', 'ウィンドウキャプチャに失敗しました')
+    capture_ocr_button = tk.Button(button_frame, text='読み取り', width=10, command=on_capture_ocr)
+    capture_ocr_button.grid(row=0, column=4, padx=10)
 
     # OCRテキストのライブ更新を開始
     root.after(300, update_ocr_text)
