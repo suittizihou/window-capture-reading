@@ -119,9 +119,11 @@ class MessageDetector:
         if len(self._message_cache) >= self._max_cache_size:
             # 新しいメッセージを優先するため、古いメッセージを削除
             cache_list = list(self._message_cache)
-            remove_count = len(cache_list) - self._max_cache_size + 1  # 新しいメッセージ用に1つ余分に削除
+            cache_size = len(cache_list)
+            # 必要な削除数を計算（最大サイズの半分を保持）
+            remove_count = cache_size // 2
             self._message_cache = set(cache_list[remove_count:])
-            self.logger.info(f"メッセージキャッシュをクリーニングしました: {len(cache_list)} → {len(self._message_cache)}")
+            self.logger.info(f"メッセージキャッシュをクリーニングしました: {cache_size} → {len(self._message_cache)}")
     
     def reset_cache(self) -> None:
         """メッセージキャッシュをリセットします。"""
