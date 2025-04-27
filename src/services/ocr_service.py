@@ -231,7 +231,7 @@ class OCRService:
                 self.logger.debug(f"終了処理中に前処理でエラーが発生しました: {e}")
             else:
                 self.logger.error(f"画像の前処理中にエラーが発生しました: {e}", exc_info=True)
-            # エラーが発生した場合、元の画像を返す
+            # エラーが発生した場合、必ず元の画像を返す
             return image
     
     def test_ocr(self) -> bool:
