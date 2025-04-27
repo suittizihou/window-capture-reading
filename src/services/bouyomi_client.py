@@ -106,12 +106,12 @@ class BouyomiClient:
         retry_interval = float(getattr(self, 'retry_interval', 2.0))
         for attempt in range(1, max_retries + 1):
             try:
-                iCommand = 0x0001  # Int16
-                iSpeed   = -1      # Int16
-                iTone    = -1      # Int16
-                iVolume  = -1      # Int16
-                iVoice   = 1       # Int16
-                bCode    = 0       # 1バイト
+                iCommand = 0x0001  # Int16（メッセージ読み上げ）
+                iSpeed   = -1      # Int16（速度: -1=デフォルト）
+                iTone    = -1      # Int16（音程: -1=デフォルト）
+                iVolume  = -1      # Int16（音量: -1=デフォルト）
+                iVoice   = 1       # Int16（声質: 1=女性1）
+                bCode    = 0       # 1バイト（文字コード: 0=UTF-8）
                 bMessage = text.encode('utf-8')
                 iLength  = len(bMessage)
 
