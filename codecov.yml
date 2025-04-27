@@ -1,0 +1,22 @@
+codecov:
+  require_ci_to_pass: false
+  notify:
+    wait_for_ci: false
+
+coverage:
+  status:
+    project:
+      default:
+        # カバレッジの閾値を下げる（実際のハードウェア依存テストは除外されるため）
+        target: 50%
+        threshold: 5%
+    patch:
+      default:
+        target: 50%
+        threshold: 5%
+
+ignore:
+  # 画面キャプチャと外部システム依存のコードを除外
+  - "src/main.py"
+  - "src/services/window_capture.py"
+  - "src/services/bouyomi_client.py"
