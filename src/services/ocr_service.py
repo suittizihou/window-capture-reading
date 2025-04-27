@@ -33,21 +33,24 @@ class OCRService:
         self.logger = logging.getLogger(__name__)
         
         # Tesseractの設定
-        tesseract_path = config.get("TESSERACT_PATH", r"C:\Program Files\Tesseract-OCR\tesseract.exe")
-        if os.path.exists(tesseract_path):
-            pytesseract.pytesseract.tesseract_cmd = tesseract_path
-            self.tesseract_path = tesseract_path
+        tesseract_default = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+        self.tesseract_path = config.get("TESSERACT_PATH", tesseract_default)
+        
+        if os.path.exists(self.tesseract_path):
+            pytesseract.pytesseract.tesseract_cmd = self.tesseract_path
             self._tesseract_available = True
         else:
-            self.logger.warning(message_manager.get("tesseract_not_found", path=tesseract_path))
+            msg = message_manager.get("tesseract_not_found", path=self.tesseract_path)
+            self.logger.warning(msg)
             self._tesseract_available = False
         
         # OCR設定
         self.lang = config.get("OCR_LANGUAGE", "jpn")
-        self.config = config.get("OCR_CONFIG", "--psm 6")  # デフォルトは単一の統一なテキストブロックを想定
+        self.config = config.get("OCR_CONFIG", "--psm 6")  # デフォルトは単一の統一なテキストブロック
         
         # 前処理設定
-        self.preprocessing_enabled = config.get("OCR_PREPROCESSING_ENABLED", "True").lower() == "true"
+        preprocessing = config.get("OCR_PREPROCESSING_ENABLED", "True")
+        self.preprocessing_enabled = preprocessing.lower() == "true"
     
     @performance_monitor.measure_time("extract_text")
     def extract_text(self, image: np.ndarray) -> Optional[str]:
@@ -74,7 +77,8 @@ class OCRService:
                 processed_image = image
             
             # OpenCV形式からPIL形式に変換
-            pil_image = Image.fromarray(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB))
+            rgb_image = cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB)
+            pil_image = Image.fromarray(rgb_image)
             
             # OCR実行
             text = pytesseract.image_to_string(
@@ -85,7 +89,8 @@ class OCRService:
             
             if text:
                 text = text.strip()
-                self.logger.debug(message_manager.get("ocr_success", length=len(text)))
+                msg = message_manager.get("ocr_success", length=len(text))
+                self.logger.debug(msg)
                 # 結果をキャッシュ
                 cache.set(str(image_hash), text)
                 return text
@@ -94,7 +99,8 @@ class OCRService:
                 return None
             
         except Exception as e:
-            self.logger.error(message_manager.get("ocr_error", error=str(e)), exc_info=True)
+            error_msg = message_manager.get("ocr_error", error=str(e))
+            self.logger.error(error_msg, exc_info=True)
             return None
     
     @performance_monitor.measure_time("preprocess_image")
@@ -131,7 +137,8 @@ class OCRService:
             return binary
             
         except Exception as e:
-            self.logger.error(message_manager.get("preprocessing_error", error=str(e)), exc_info=True)
+            error_msg = message_manager.get("preprocessing_error", error=str(e))
+            self.logger.error(error_msg, exc_info=True)
             return image  # エラー時は元の画像を返す
     
     @performance_monitor.measure_time("test_ocr")
@@ -142,7 +149,8 @@ class OCRService:
             bool: テストが成功したかどうか
         """
         if not self._tesseract_available:
-            self.logger.warning(message_manager.get("tesseract_not_found", path=self.tesseract_path))
+            msg = message_manager.get("tesseract_not_found", path=self.tesseract_path)
+            self.logger.warning(msg)
             return False
             
         try:
@@ -169,5 +177,6 @@ class OCRService:
                 return False
                 
         except Exception as e:
-            self.logger.error(message_manager.get("ocr_error", error=str(e)), exc_info=True)
+            error_msg = message_manager.get("ocr_error", error=str(e))
+            self.logger.error(error_msg, exc_info=True)
             return False
