@@ -27,6 +27,12 @@ class WindowCapture:
         # Win32 APIの関数を取得
         self.user32 = windll.user32
         self.gdi32 = windll.gdi32
+        
+        # DPIスケーリング対応
+        try:
+            windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass  # 失敗しても無視
     
     def find_window(self) -> Optional[HWND]:
         """指定されたタイトルのウィンドウハンドルを取得します。
