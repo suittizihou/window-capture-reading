@@ -106,21 +106,23 @@ class BouyomiClient:
         retry_interval = float(getattr(self, 'retry_interval', 2.0))
         for attempt in range(1, max_retries + 1):
             try:
-                iCommand = 0x0001  # メッセージ読み上げ
-                iSpeed   = -1      # 速度（-1:デフォルト）
-                iTone    = -1      # 音程（-1:デフォルト）
-                iVolume  = -1      # 音量（-1:デフォルト）
-                iVoice   = 1       # 声質（1:女性1）
-                bCode    = 0       # 文字コード(0:UTF-8)
+                iCommand = 0x0001  # Int16（メッセージ読み上げ）
+                iSpeed   = -1      # Int16（速度: -1=デフォルト）
+                iTone    = -1      # Int16（音程: -1=デフォルト）
+                iVolume  = -1      # Int16（音量: -1=デフォルト）
+                iVoice   = 1       # Int16（声質: 1=女性1）
+                bCode    = 0       # 1バイト（文字コード: 0=UTF-8）
                 bMessage = text.encode('utf-8')
                 iLength  = len(bMessage)
+
+                # .NETサンプルと同じ順序・型でパック
+                packet = struct.pack('<hhhhhB', iCommand, iSpeed, iTone, iVolume, iVoice, bCode)
+                packet += struct.pack('<I', iLength)
+                packet += bMessage
 
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                     sock.settimeout(self._timeout)
                     sock.connect((self.host, self.port))
-                    packet = struct.pack('<hhhhhb', iCommand, iSpeed, iTone, iVolume, iVoice, bCode)
-                    packet += struct.pack('<I', iLength)
-                    packet += bMessage
                     self.logger.debug(f"送信バイト列: {packet}")
                     sock.sendall(packet)
                 self.logger.info(f"棒読みちゃん本体にバイナリコマンド送信: {text}")
