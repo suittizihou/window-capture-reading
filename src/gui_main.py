@@ -185,22 +185,9 @@ def main(window_title: Optional[str] = None) -> None:
                 entry.grid(row=i, column=1, padx=10, pady=8)
                 entries[key] = entry
         def on_save():
-            env_path = Path(__file__).parent.parent / ".env"
-            if env_path.exists():
-                with open(env_path, 'r', encoding='utf-8') as f:
-                    lines = f.readlines()
-            else:
-                lines = []
-            env_dict = {}
-            for line in lines:
-                if '=' in line and not line.strip().startswith('#'):
-                    k, v = line.split('=', 1)
-                    env_dict[k.strip()] = v.strip().split('#')[0].strip()
             for key, _, _ in settings_keys:
-                env_dict[key] = entries[key].get()
-            with open(env_path, 'w', encoding='utf-8') as f:
-                for k, v in env_dict.items():
-                    f.write(f"{k}={v}\n")
+                config[key] = entries[key].get()
+            config.save()
             messagebox.showinfo('情報', '設定を保存しました。再起動で反映されます。')
             dialog.destroy()
         def on_cancel():
