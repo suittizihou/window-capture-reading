@@ -164,9 +164,6 @@ def main(window_title: Optional[str] = None) -> None:
         settings_keys = [
             ("TARGET_WINDOW_TITLE", "ウィンドウタイトル", config.get("TARGET_WINDOW_TITLE", "LDPlayer")),
             ("CAPTURE_INTERVAL", "キャプチャ間隔（秒）", config.get("CAPTURE_INTERVAL", "1.0")),
-            ("OCR_LANGUAGE", "OCR言語", config.get("OCR_LANGUAGE", "jpn")),
-            ("BOUYOMI_ENABLED", "棒読みちゃん有効", config.get("BOUYOMI_ENABLED", "true")),
-            ("BOUYOMI_HOST", "棒読みちゃんホスト", config.get("BOUYOMI_HOST", "127.0.0.1")),
             ("BOUYOMI_PORT", "棒読みちゃんポート", config.get("BOUYOMI_PORT", "50001")),
             ("BOUYOMI_VOICE_TYPE", "棒読みちゃん声質", config.get("BOUYOMI_VOICE_TYPE", "0")),
         ]
