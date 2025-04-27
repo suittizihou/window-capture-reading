@@ -269,4 +269,4 @@ class BouyomiClient:
                 try:
                     sock.close()
                 except Exception as e:
-                    self.logger.debug(f"ソケットのクローズ中にエラーが発生しました: {e}") 
+                    self.logger.debug(f"ソケットのクローズ中にエラーが発生しました: {e}")
