@@ -72,48 +72,69 @@ class BouyomiClient:
         if not text:
             return False
         
-        try:
-            # コマンドデータの作成
-            command = self._create_command(text)
-            
-            # 送信
-            return self._send_command(command)
-            
-        except Exception as e:
-            self.logger.error(f"棒読みちゃんへの送信中にエラーが発生しました: {e}", exc_info=True)
-            return False
+        max_retries = int(getattr(self, 'max_retries', 3))
+        retry_interval = float(getattr(self, 'retry_interval', 2.0))
+        for attempt in range(1, max_retries + 1):
+            try:
+                # コマンドデータの作成
+                command = self._create_command(text)
+                # 送信
+                result = self._send_command(command)
+                if result:
+                    if attempt > 1:
+                        self.logger.info(f"リトライ{attempt-1}回目で復旧成功: {text}")
+                    return True
+                else:
+                    raise ConnectionError("送信失敗")
+            except Exception as e:
+                self.logger.error(f"棒読みちゃんへの送信中にエラーが発生しました（{attempt}回目）: {e}", exc_info=True)
+                if attempt < max_retries:
+                    self.logger.info(f"{retry_interval}秒後に再試行します...")
+                    time.sleep(retry_interval)
+                else:
+                    self.logger.error(f"最大リトライ回数({max_retries})に到達。復旧できませんでした: {text}")
+        return False
     
     def talk(self, text: str) -> bool:
         """
         棒読みちゃん本体のバイナリTCPプロトコルでコマンド送信する（.NETサンプル準拠）。
+        リトライ・復旧処理付き。
         """
         if not text:
             return False
-        try:
-            # パラメータ（デフォルト値は.NETサンプルに準拠）
-            iCommand = 0x0001  # メッセージ読み上げ
-            iSpeed   = -1      # 速度（-1:デフォルト）
-            iTone    = -1      # 音程（-1:デフォルト）
-            iVolume  = -1      # 音量（-1:デフォルト）
-            iVoice   = 1       # 声質（1:女性1）
-            bCode    = 0       # 文字コード(0:UTF-8)
-            bMessage = text.encode('utf-8')
-            iLength  = len(bMessage)
+        max_retries = int(getattr(self, 'max_retries', 3))
+        retry_interval = float(getattr(self, 'retry_interval', 2.0))
+        for attempt in range(1, max_retries + 1):
+            try:
+                iCommand = 0x0001  # メッセージ読み上げ
+                iSpeed   = -1      # 速度（-1:デフォルト）
+                iTone    = -1      # 音程（-1:デフォルト）
+                iVolume  = -1      # 音量（-1:デフォルト）
+                iVoice   = 1       # 声質（1:女性1）
+                bCode    = 0       # 文字コード(0:UTF-8)
+                bMessage = text.encode('utf-8')
+                iLength  = len(bMessage)
 
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.settimeout(self._timeout)
-                sock.connect((self.host, self.port))
-                # バイナリで送信
-                packet = struct.pack('<hhhhhb', iCommand, iSpeed, iTone, iVolume, iVoice, bCode)
-                packet += struct.pack('<I', iLength)
-                packet += bMessage
-                self.logger.debug(f"送信バイト列: {packet}")
-                sock.sendall(packet)
-            self.logger.info(f"棒読みちゃん本体にバイナリコマンド送信: {text}")
-            return True
-        except Exception as e:
-            self.logger.error(f"棒読みちゃんバイナリ送信エラー: {e}", exc_info=True)
-            return False
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(self._timeout)
+                    sock.connect((self.host, self.port))
+                    packet = struct.pack('<hhhhhb', iCommand, iSpeed, iTone, iVolume, iVoice, bCode)
+                    packet += struct.pack('<I', iLength)
+                    packet += bMessage
+                    self.logger.debug(f"送信バイト列: {packet}")
+                    sock.sendall(packet)
+                self.logger.info(f"棒読みちゃん本体にバイナリコマンド送信: {text}")
+                if attempt > 1:
+                    self.logger.info(f"リトライ{attempt-1}回目で復旧成功: {text}")
+                return True
+            except Exception as e:
+                self.logger.error(f"棒読みちゃんバイナリ送信エラー（{attempt}回目）: {e}", exc_info=True)
+                if attempt < max_retries:
+                    self.logger.info(f"{retry_interval}秒後に再試行します...")
+                    time.sleep(retry_interval)
+                else:
+                    self.logger.error(f"最大リトライ回数({max_retries})に到達。復旧できませんでした: {text}")
+        return False
     
     def _create_command(self, text: str) -> bytes:
         """棒読みちゃんコマンドデータを作成します。
