@@ -178,7 +178,7 @@ def main(window_title: Optional[str] = None) -> None:
         for i, (key, label, value) in enumerate(settings_keys):
             tk.Label(dialog, text=label, anchor='w').grid(row=i, column=0, padx=10, pady=8, sticky='w')
             if key == "TARGET_WINDOW_TITLE":
-                combo = ttk.Combobox(dialog, values=window_titles, width=28)
+                combo = ttk.Combobox(dialog, values=window_titles, width=28, state="readonly")
                 combo.set(value)
                 combo.grid(row=i, column=1, padx=10, pady=8)
                 entries[key] = combo
