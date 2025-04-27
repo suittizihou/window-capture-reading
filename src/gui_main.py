@@ -16,13 +16,16 @@ import ctypes.wintypes
 from PIL import Image, ImageTk, ImageOps
 import cv2
 import numpy as np
+from src.services.window_capture import WindowCapture
 
+# グローバル変数の初期化
+roi = None  # ROI矩形座標 [x1, y1, x2, y2]
 
 def main(window_title: Optional[str] = None) -> None:
     """
     Tkinterで実装したOCRテキストライブプレビュー付きGUI。
-    - 最新のOCR認識テキストをリアルタイムで表示
-    - Start/Stopボタンでメイン処理を制御
+    - 画面キャプチャとプレビューを常時表示
+    - Start/Stopボタンでテキスト認識と読み上げを制御
     - ステータスバーでシステム状態を表示
 
     Args:
@@ -59,6 +62,9 @@ def main(window_title: Optional[str] = None) -> None:
     running.clear()
     ocr_text_queue = queue.Queue()
     ocr_thread = None
+    capture_thread = None  # キャプチャスレッド用
+    capture_running = threading.Event()  # キャプチャ制御用
+    capture_running.set()  # キャプチャは常時実行
 
     # --- レイアウトの土台だけ先に作る ---
     main_frame = tk.Frame(root)
@@ -125,7 +131,6 @@ def main(window_title: Optional[str] = None) -> None:
             pan_offset[1] = max(min_y, min(pan_offset[1], max_y))
 
     # ROIは常に元画像座標系で保持
-    roi = None  # [x1, y1, x2, y2] 画像座標
     dragging = False
     drag_offset = (0, 0)
     img_width = None
@@ -150,7 +155,8 @@ def main(window_title: Optional[str] = None) -> None:
         return (x - x_offset) / scale, (y - y_offset) / scale
 
     def draw_preview_with_roi(frame_img: Image.Image) -> None:
-        nonlocal preview_img_on_canvas, roi_rect, preview_img_ref, roi, img_width, img_height, handle_ids
+        global roi
+        nonlocal preview_img_on_canvas, roi_rect, preview_img_ref, img_width, img_height, handle_ids
         img = frame_img.transpose(Image.FLIP_TOP_BOTTOM)
         on_zoom_change.last_img = frame_img
         img_width, img_height = img.width, img.height
@@ -173,9 +179,11 @@ def main(window_title: Optional[str] = None) -> None:
         if roi is None:
             # 初期ROIは画像座標系で設定
             roi = [int(img_width*0.1), int(img_height*0.1), int(img_width*0.6), int(img_height*0.5)]
+        # ROIの正規化と最新化
         x1, y1, x2, y2 = roi
-        cx1, cy1 = image_to_canvas(x1, y1)
-        cx2, cy2 = image_to_canvas(x2, y2)
+        roi = [min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)]
+        cx1, cy1 = image_to_canvas(roi[0], roi[1])
+        cx2, cy2 = image_to_canvas(roi[2], roi[3])
         roi_rect = preview_canvas.create_rectangle(cx1, cy1, cx2, cy2, outline='red', width=2)
         handle_coords = [
             (cx1, cy1),
@@ -187,6 +195,8 @@ def main(window_title: Optional[str] = None) -> None:
             handle_ids[i] = preview_canvas.create_rectangle(
                 hx - HANDLE_SIZE//2, hy - HANDLE_SIZE//2, hx + HANDLE_SIZE//2, hy + HANDLE_SIZE//2,
                 fill='white', outline='black')
+        # ROIをグローバルに最新化
+        # globals()['roi'] = roi  # 旧方式
 
     def get_handle_at(x, y):
         # どのハンドルがクリックされたか判定（Canvas座標）
@@ -213,7 +223,8 @@ def main(window_title: Optional[str] = None) -> None:
                 active_handle = None
 
     def on_canvas_drag(event):
-        nonlocal dragging, roi, active_handle
+        global roi
+        nonlocal dragging, active_handle
         if not dragging:
             return
         x, y = event.x, event.y
@@ -273,78 +284,144 @@ def main(window_title: Optional[str] = None) -> None:
     roi_rect = None
 
     def set_status(state: str) -> None:
-        """ステータスバーの状態を更新する。"""
+        """ステータスバーの状態とスタイルを更新"""
         status_var.set(state)
         if state == 'Running':
-            status_bar.config(bg='#d0ffd0')
-        elif state == 'Error':
-            status_bar.config(bg='#ffd0d0')
+            status_bar.config(bg='#e6ffe6')  # 薄緑
+        elif state == 'Stopped':
+            status_bar.config(bg='#ffe6e6')  # 薄赤
         else:
-            status_bar.config(bg='#f0f0f0')
+            status_bar.config(bg='#f0f0f0')  # デフォルト
+        status_bar.update()
 
-    def ocr_loop():
-        """OCR・読み上げメインループを別スレッドで実行し、テキストをキューに送る。
-        棒読みちゃん連携も行う。
-        """
-        from src.services.window_capture import WindowCapture
-        from src.services.ocr_service import OCRService
-        from src.services.bouyomi_client import BouyomiClient
+    def capture_loop():
+        """画面キャプチャとプレビュー表示を行うループ"""
+        global roi
+        nonlocal capture_thread
         from src.utils.config import Config
         config = Config()
-        window_capture = WindowCapture(config.get("TARGET_WINDOW_TITLE", "LDPlayer"))
+        window_name = window_title or (config.get("TARGET_WINDOW_TITLE", "LDPlayer") if config else "LDPlayer")
+        window_capture = WindowCapture(window_name)
+        # CAPTURE_INTERVALを設定ファイルから取得
+        try:
+            capture_interval = float(config.get("CAPTURE_INTERVAL", "1.0"))
+        except Exception:
+            capture_interval = 1.0
+        logger.info(f"キャプチャループを開始（CAPTURE_INTERVAL={capture_interval}秒）")
+        try:
+            while capture_running.is_set():
+                frame = window_capture.capture()
+                if frame is None:
+                    logger.warning("キャプチャ画像が取得できませんでした（Noneが返却されました）")
+                    time.sleep(0.2)
+                    continue
+                frame_pil = None
+                if isinstance(frame, np.ndarray):
+                    try:
+                        frame_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                    except Exception as e:
+                        logger.error(f"キャプチャ画像の変換に失敗: {e}", exc_info=True)
+                        time.sleep(0.2)
+                        continue
+                elif isinstance(frame, Image.Image):
+                    frame_pil = frame
+                else:
+                    logger.warning(f"キャプチャ画像の型が不正です: {type(frame)}")
+                    time.sleep(0.2)
+                    continue
+                root.after(0, lambda: draw_preview_with_roi(frame_pil))
+                # --- OCR前処理プレビューも常時表示（ROIでクロップ） ---
+                try:
+                    # 画像を上下反転（OCRループと同じ処理）
+                    frame_flipped = frame_pil.transpose(Image.FLIP_TOP_BOTTOM)
+                    
+                    # ROIでクロップ
+                    crop_img = frame_flipped
+                    roi_now = roi if roi is not None else None
+                    if roi_now is not None:
+                        x1, y1, x2, y2 = [int(round(v)) for v in roi_now]
+                        x1 = max(0, min(x1, frame_flipped.width-1))
+                        y1 = max(0, min(y1, frame_flipped.height-1))
+                        x2 = max(0, min(x2, frame_flipped.width))
+                        y2 = max(0, min(y2, frame_flipped.height))
+                        if x2 > x1 and y2 > y1:
+                            crop_img = frame_flipped.crop((x1, y1, x2, y2))
+                    
+                    # クロップした画像を処理（グレースケール・二値化）
+                    frame_cv = np.array(crop_img)
+                    if frame_cv.ndim == 3:
+                        gray = cv2.cvtColor(frame_cv, cv2.COLOR_RGB2GRAY)
+                    else:
+                        gray = frame_cv
+                    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                    thresh_rgb = cv2.cvtColor(thresh, cv2.COLOR_GRAY2RGB)
+                    thresh_pil = Image.fromarray(thresh_rgb)
+                    thresh_pil.thumbnail((200, 200), Image.LANCZOS)
+                    thresh_tk = ImageTk.PhotoImage(thresh_pil)
+                    root.after(0, lambda img=thresh_tk: ocr_img_preview_label.configure(image=img))
+                    root.after(0, lambda img=thresh_tk: setattr(ocr_img_preview_label, 'image_ref', img))
+                except Exception as e:
+                    logger.error(f"OCRプレビュー画像の生成に失敗: {e}", exc_info=True)
+                time.sleep(capture_interval)
+        except Exception as e:
+            logger.error(f"キャプチャループでエラー発生: {e}", exc_info=True)
+        finally:
+            logger.info("キャプチャループを終了")
+            capture_thread = None
+
+    def ocr_loop():
+        """OCRと読み上げを行うループ"""
+        global roi
+        nonlocal ocr_thread
+        from src.utils.config import Config
+        from src.services.ocr_service import OCRService
+        from src.services.bouyomi_client import BouyomiClient
+        config = Config()
+        window_name = window_title or config.get("TARGET_WINDOW_TITLE", "LDPlayer")
+        window_capture = WindowCapture(window_name)
         ocr_service = OCRService(config)
         bouyomi_enabled = str(config.get("BOUYOMI_ENABLED", "true")).lower() == "true"
-        bouyomi_client = None
-        if bouyomi_enabled:
-            try:
-                bouyomi_client = BouyomiClient(config)
-                logger.info("BouyomiClientを初期化しました（GUI）")
-            except Exception as e:
-                logger.error(f"BouyomiClientの初期化に失敗しました: {e}", exc_info=True)
-                bouyomi_client = None
+        bouyomi_client = BouyomiClient(config) if bouyomi_enabled else None
         last_text = ''
+        logger.info("OCRループを開始")
         try:
             while running.is_set():
                 frame = window_capture.capture()
-                if frame is not None:
-                    # プレビュー描画（必ず最新画像で）
-                    on_zoom_change.last_img = frame
-                    draw_preview_with_roi(frame)
-                    # --- まずキャプチャ画像を上下反転 ---
-                    flipped_frame = frame.transpose(Image.FLIP_TOP_BOTTOM)
-                    # ROI座標でクロップしてOCR
-                    crop_img = flipped_frame
-                    if roi is not None:
-                        x1, y1, x2, y2 = [int(round(v)) for v in roi]
-                        x1 = max(0, min(x1, flipped_frame.width-1))
-                        y1 = max(0, min(y1, flipped_frame.height-1))
-                        x2 = max(0, min(x2, flipped_frame.width))
-                        y2 = max(0, min(y2, flipped_frame.height))
-                        if x2 > x1 and y2 > y1:
-                            crop_img = flipped_frame.crop((x1, y1, x2, y2))
-                    # --- 前処理（グレースケール・リサイズ・コントラスト・二値化） ---
-                    img_np = np.array(crop_img)
-                    if img_np.ndim == 3:
-                        img_np = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
-                    h, w = img_np.shape[:2]
-                    if h < 40:
-                        scale = 40 / h
-                        img_np = cv2.resize(img_np, (int(w * scale), 40), interpolation=cv2.INTER_LANCZOS4)
-                    img_np = cv2.convertScaleAbs(img_np, alpha=1.5, beta=10)
-                    _, img_np = cv2.threshold(img_np, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-                    preprocessed_img = Image.fromarray(img_np)
-                    # --- プレビュー用画像を表示（幅200pxでリサイズ） ---
-                    preview_disp_img = preprocessed_img.copy()
-                    disp_w = 200
-                    disp_h = int(preview_disp_img.height * disp_w / preview_disp_img.width)
-                    preview_disp_img = preview_disp_img.resize((disp_w, disp_h), Image.LANCZOS)
-                    tk_preview_img = ImageTk.PhotoImage(preview_disp_img)
-                    def update_preview():
-                        ocr_img_preview_label.config(image=tk_preview_img)
-                        ocr_img_preview_label.image = tk_preview_img  # 参照保持
-                    ocr_img_preview_label.after(0, update_preview)
-                    # --- OCR ---
-                    text = ocr_service.extract_text(preprocessed_img)
+                if frame is None:
+                    logger.warning("OCR用キャプチャ画像が取得できませんでした（Noneが返却されました）")
+                    time.sleep(0.2)
+                    continue
+                frame_pil = None
+                if isinstance(frame, np.ndarray):
+                    try:
+                        frame_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                    except Exception as e:
+                        logger.error(f"OCR用画像の変換に失敗: {e}", exc_info=True)
+                        time.sleep(0.2)
+                        continue
+                elif isinstance(frame, Image.Image):
+                    frame_pil = frame
+                else:
+                    logger.warning(f"OCR用キャプチャ画像の型が不正です: {type(frame)}")
+                    time.sleep(0.2)
+                    continue
+                
+                # draw_preview_with_roiと同じように画像を上下反転
+                frame_pil = frame_pil.transpose(Image.FLIP_TOP_BOTTOM)
+                
+                # --- ROIでクロップ ---
+                crop_img = frame_pil
+                roi_now = roi if roi is not None else None
+                if roi_now is not None:
+                    x1, y1, x2, y2 = [int(round(v)) for v in roi_now]
+                    x1 = max(0, min(x1, frame_pil.width-1))
+                    y1 = max(0, min(y1, frame_pil.height-1))
+                    x2 = max(0, min(x2, frame_pil.width))
+                    y2 = max(0, min(y2, frame_pil.height))
+                    if x2 > x1 and y2 > y1:
+                        crop_img = frame_pil.crop((x1, y1, x2, y2))
+                try:
+                    text = ocr_service.extract_text(crop_img)
                     if text and text != last_text:
                         ocr_text_queue.put(text)
                         last_text = text
@@ -354,7 +431,11 @@ def main(window_title: Optional[str] = None) -> None:
                                 logger.info(f"棒読みちゃんで読み上げ: {text}")
                             except Exception as e:
                                 logger.error(f"棒読みちゃん読み上げエラー: {e}", exc_info=True)
-                time.sleep(float(config.get("CAPTURE_INTERVAL", "1.0")))
+                except Exception as e:
+                    logger.error(f"OCR処理でエラー: {e}", exc_info=True)
+                time.sleep(0.5)  # OCRは低頻度で実行
+        except Exception as e:
+            logger.error(f"OCRループでエラー発生: {e}", exc_info=True)
         finally:
             if bouyomi_client is not None:
                 try:
@@ -362,6 +443,9 @@ def main(window_title: Optional[str] = None) -> None:
                     logger.info("BouyomiClientをクローズしました（GUI）")
                 except Exception as e:
                     logger.error(f"BouyomiClientのクローズに失敗: {e}", exc_info=True)
+            logger.info("OCRループを終了")
+            ocr_thread = None
+            set_status('Stopped')
 
     def update_ocr_text():
         """OCRテキストのライブ更新処理（Tkinterのafterで定期実行）。"""
@@ -451,24 +535,32 @@ def main(window_title: Optional[str] = None) -> None:
         cancel_btn.grid(row=len(settings_keys), column=1, padx=10, pady=20)
 
     def on_start() -> None:
-        if not running.is_set():
+        """OCRと読み上げを開始"""
+        nonlocal ocr_thread
+        if not ocr_thread:
             running.set()
+            ocr_thread = threading.Thread(target=ocr_loop, daemon=True)
+            ocr_thread.start()
             set_status('Running')
             start_button.config(state=tk.DISABLED)
             stop_button.config(state=tk.NORMAL)
-            global ocr_thread
-            ocr_thread = threading.Thread(target=ocr_loop, daemon=True)
-            ocr_thread.start()
 
     def on_stop() -> None:
+        """OCRと読み上げを停止"""
         running.clear()
         set_status('Stopped')
         start_button.config(state=tk.NORMAL)
         stop_button.config(state=tk.DISABLED)
 
     def on_exit() -> None:
+        """アプリケーションの終了処理"""
         running.clear()
-        root.destroy()
+        capture_running.clear()
+        if ocr_thread:
+            ocr_thread.join(timeout=1.0)
+        if capture_thread:
+            capture_thread.join(timeout=1.0)
+        root.quit()
 
     # --- ボタンフレーム（関数定義後に生成） ---
     button_frame = tk.Frame(left_frame)
@@ -529,6 +621,10 @@ def main(window_title: Optional[str] = None) -> None:
     preview_canvas.bind('<ButtonPress-3>', on_pan_start)
     preview_canvas.bind('<B3-Motion>', on_pan_drag)
     preview_canvas.bind('<ButtonRelease-3>', on_pan_end)
+
+    # キャプチャスレッドを開始
+    capture_thread = threading.Thread(target=capture_loop, daemon=True)
+    capture_thread.start()
 
     root.mainloop()
 
