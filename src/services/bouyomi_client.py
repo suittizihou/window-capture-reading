@@ -41,6 +41,24 @@ class BouyomiClient:
         
         # 接続タイムアウト設定
         self._timeout = float(config.get("BOUYOMI_COMMAND_TIMEOUT", "3.0"))  # 秒
+        
+        # 永続的なソケット接続（常にNoneから開始）
+        self._socket = None
+    
+    def __del__(self) -> None:
+        """デストラクタ - オブジェクトが破棄される際にリソースを解放します。"""
+        self.close()
+    
+    def close(self) -> None:
+        """接続をクローズし、リソースを解放します。"""
+        try:
+            if self._socket:
+                self._socket.close()
+                self._socket = None
+            self._connected = False
+            self.logger.debug("棒読みちゃんとの接続を閉じました")
+        except Exception as e:
+            self.logger.error(f"棒読みちゃんとの接続クローズ中にエラーが発生しました: {e}", exc_info=True)
     
     def speak(self, text: str) -> bool:
         """テキストを棒読みちゃんに送信して読み上げさせます。
@@ -65,6 +83,38 @@ class BouyomiClient:
             self.logger.error(f"棒読みちゃんへの送信中にエラーが発生しました: {e}", exc_info=True)
             return False
     
+    def talk(self, text: str) -> bool:
+        """
+        棒読みちゃん本体のバイナリTCPプロトコルでコマンド送信する（.NETサンプル準拠）。
+        """
+        if not text:
+            return False
+        try:
+            # パラメータ（デフォルト値は.NETサンプルに準拠）
+            iCommand = 0x0001  # メッセージ読み上げ
+            iSpeed   = -1      # 速度（-1:デフォルト）
+            iTone    = -1      # 音程（-1:デフォルト）
+            iVolume  = -1      # 音量（-1:デフォルト）
+            iVoice   = 1       # 声質（1:女性1）
+            bCode    = 0       # 文字コード(0:UTF-8)
+            bMessage = text.encode('utf-8')
+            iLength  = len(bMessage)
+
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(self._timeout)
+                sock.connect((self.host, self.port))
+                # バイナリで送信
+                packet = struct.pack('<hhhhhb', iCommand, iSpeed, iTone, iVolume, iVoice, bCode)
+                packet += struct.pack('<I', iLength)
+                packet += bMessage
+                self.logger.debug(f"送信バイト列: {packet}")
+                sock.sendall(packet)
+            self.logger.info(f"棒読みちゃん本体にバイナリコマンド送信: {text}")
+            return True
+        except Exception as e:
+            self.logger.error(f"棒読みちゃんバイナリ送信エラー: {e}", exc_info=True)
+            return False
+    
     def _create_command(self, text: str) -> bytes:
         """棒読みちゃんコマンドデータを作成します。
         
@@ -78,17 +128,21 @@ class BouyomiClient:
         text_bytes = text.encode('utf-8')
         
         # コマンド形式：
-        # [コマンド(1)][速度(1)][音程(1)][音量(1)][声質(1)][エンコード(1)][追加声質(4)][テキスト長(4)][テキスト(可変)]
+        # [コマンド(1)][速度(2)][音程(2)][音量(2)][声質(1)][エンコード(1)][追加声質(4)][テキスト長(4)][テキスト(可変)]
+        # 注意: 数値の型とバイト数が厳密に指定されている
         command = struct.pack(
-            '<bbbbbiI',
-            0x01,                   # コマンド（0x01：読み上げ）
-            self.voice_speed,       # 速度
-            self.voice_tone,        # 音程
-            self.voice_volume,      # 音量
-            self.voice_type,        # 声質
-            0x00,                   # エンコード（0：UTF-8, 1：Unicode, 2：Shift-JIS）
-            len(text_bytes)         # テキスト長
+            '<bhhhbbi',
+            0x01,                    # コマンド（0x01：読み上げ）[1バイト]
+            self.voice_speed,        # 速度 [2バイト、符号付き]
+            self.voice_tone,         # 音程 [2バイト、符号付き]
+            self.voice_volume,       # 音量 [2バイト、符号付き]
+            self.voice_type,         # 声質 [1バイト、符号なし]
+            0x00,                    # エンコード（0：UTF-8, 1：Unicode, 2：Shift-JIS）[1バイト]
+            self.voice_type_specific # 追加声質 [4バイト、符号付き]
         )
+        
+        # テキスト長を追加 [4バイト]
+        command += struct.pack('<i', len(text_bytes))
         
         # テキストデータを追加
         command += text_bytes
@@ -122,8 +176,9 @@ class BouyomiClient:
             # コマンド送信
             sock.sendall(command)
             
-            self.logger.debug(f"棒読みちゃんにテキストを送信しました: {len(command)} バイト")
+            # 接続成功を記録
             self._connected = True
+            self.logger.debug(f"棒読みちゃんにテキストを送信しました: {len(command)} バイト")
             return True
             
         except ConnectionRefusedError:
@@ -150,8 +205,8 @@ class BouyomiClient:
             if sock:
                 try:
                     sock.close()
-                except:
-                    pass
+                except Exception as e:
+                    self.logger.debug(f"ソケットのクローズ中にエラーが発生しました: {e}")
     
     def _try_connect(self) -> bool:
         """棒読みちゃんへの接続を試みます。
@@ -213,5 +268,5 @@ class BouyomiClient:
             if sock:
                 try:
                     sock.close()
-                except:
-                    pass 
+                except Exception as e:
+                    self.logger.debug(f"ソケットのクローズ中にエラーが発生しました: {e}") 

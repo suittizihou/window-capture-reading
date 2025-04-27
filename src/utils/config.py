@@ -3,6 +3,7 @@
 """
 
 import os
+import re
 from pathlib import Path
 from typing import Dict
 
@@ -24,7 +25,7 @@ def load_config() -> Dict[str, str]:
         "TARGET_WINDOW_TITLE": os.getenv("TARGET_WINDOW_TITLE", "LDPlayer"),
         
         # キャプチャ設定
-        "CAPTURE_INTERVAL": os.getenv("CAPTURE_INTERVAL", "1.0"),
+        "CAPTURE_INTERVAL": clean_value(os.getenv("CAPTURE_INTERVAL", "1.0")),
         
         # OCR設定
         "TESSERACT_PATH": os.getenv("TESSERACT_PATH", r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
@@ -55,3 +56,28 @@ def load_config() -> Dict[str, str]:
     }
     
     return config
+
+def clean_value(value: str) -> str:
+    """環境変数の値からコメントを取り除きます。
+
+    Args:
+        value: 環境変数の値
+
+    Returns:
+        str: コメントを取り除いた値
+    """
+    if value is None:
+        return ""
+    
+    # '#'以降の文字列を取り除く
+    return re.sub(r'#.*$', '', value).strip()
+
+class Config(dict):
+    """
+    環境設定を辞書として管理するクラス。
+    """
+    def __init__(self):
+        super().__init__(**load_config())
+
+    def get(self, key: str, default=None):
+        return super().get(key, default)

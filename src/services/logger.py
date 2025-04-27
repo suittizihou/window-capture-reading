@@ -5,13 +5,16 @@
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
-def setup_logger(config: Dict[str, str]) -> None:
+def setup_logger(config: Dict[str, str]) -> logging.Logger:
     """アプリケーション全体で使用するロガーを設定します。
 
     Args:
         config: 環境設定の辞書
+        
+    Returns:
+        logging.Logger: 設定されたロガーオブジェクト
     """
     log_level = getattr(logging, config.get("LOG_LEVEL", "INFO"))
     log_file = config.get("LOG_FILE", "app.log")
@@ -19,6 +22,10 @@ def setup_logger(config: Dict[str, str]) -> None:
     # ロガーの基本設定
     logger = logging.getLogger()
     logger.setLevel(log_level)
+    
+    # 既存のハンドラをクリア（重複を避けるため）
+    if logger.hasHandlers():
+        logger.handlers.clear()
     
     # フォーマッターの作成
     formatter = logging.Formatter(
@@ -40,3 +47,5 @@ def setup_logger(config: Dict[str, str]) -> None:
     )
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
+    
+    return logger
