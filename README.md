@@ -49,7 +49,7 @@ Tesseract・棒読みちゃんのセットアップは [docs/tesseract_setup.md]
 ## 起動方法
 
 ```powershell
-python src/main.py
+python -m src.main
 ```
 
 - ウィンドウタイトルは`.env`で指定（例：LDPlayer, Chrome など）
