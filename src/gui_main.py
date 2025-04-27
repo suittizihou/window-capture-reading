@@ -5,6 +5,8 @@ from typing import Optional
 import queue
 import time
 from src.main import run_main_loop
+from src.utils.logging_config import setup_logging
+import logging
 
 
 def main(window_title: Optional[str] = None) -> None:
@@ -17,6 +19,8 @@ def main(window_title: Optional[str] = None) -> None:
     Args:
         window_title: 現在ターゲットとなっているウィンドウ名
     """
+    setup_logging()
+    logger = logging.getLogger(__name__)
     root = tk.Tk()
     root.title('Window Capture Reading')
     root.geometry('600x260')
@@ -62,22 +66,48 @@ def main(window_title: Optional[str] = None) -> None:
             status_bar.config(bg='#f0f0f0')
 
     def ocr_loop():
-        """OCR・読み上げメインループを別スレッドで実行し、テキストをキューに送る。"""
+        """OCR・読み上げメインループを別スレッドで実行し、テキストをキューに送る。
+        棒読みちゃん連携も行う。
+        """
         from src.services.window_capture import WindowCapture
         from src.services.ocr_service import OCRService
+        from src.services.bouyomi_client import BouyomiClient
         from src.utils.config import Config
         config = Config()
         window_capture = WindowCapture(config.get("TARGET_WINDOW_TITLE", "LDPlayer"))
         ocr_service = OCRService(config)
+        bouyomi_enabled = str(config.get("BOUYOMI_ENABLED", "true")).lower() == "true"
+        bouyomi_client = None
+        if bouyomi_enabled:
+            try:
+                bouyomi_client = BouyomiClient(config)
+                logger.info("BouyomiClientを初期化しました（GUI）")
+            except Exception as e:
+                logger.error(f"BouyomiClientの初期化に失敗しました: {e}", exc_info=True)
+                bouyomi_client = None
         last_text = ''
-        while running.is_set():
-            frame = window_capture.capture()
-            if frame is not None:
-                text = ocr_service.extract_text(frame)
-                if text and text != last_text:
-                    ocr_text_queue.put(text)
-                    last_text = text
-            time.sleep(float(config.get("CAPTURE_INTERVAL", "1.0")))
+        try:
+            while running.is_set():
+                frame = window_capture.capture()
+                if frame is not None:
+                    text = ocr_service.extract_text(frame)
+                    if text and text != last_text:
+                        ocr_text_queue.put(text)
+                        last_text = text
+                        if bouyomi_enabled and bouyomi_client is not None:
+                            try:
+                                bouyomi_client.talk(text)
+                                logger.info(f"棒読みちゃんで読み上げ: {text}")
+                            except Exception as e:
+                                logger.error(f"棒読みちゃん読み上げエラー: {e}", exc_info=True)
+                time.sleep(float(config.get("CAPTURE_INTERVAL", "1.0")))
+        finally:
+            if bouyomi_client is not None:
+                try:
+                    bouyomi_client.close()
+                    logger.info("BouyomiClientをクローズしました（GUI）")
+                except Exception as e:
+                    logger.error(f"BouyomiClientのクローズに失敗: {e}", exc_info=True)
 
     def update_ocr_text():
         """OCRテキストのライブ更新処理（Tkinterのafterで定期実行）。"""
