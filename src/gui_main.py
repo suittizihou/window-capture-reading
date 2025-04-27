@@ -10,6 +10,9 @@ import logging
 import os
 from pathlib import Path
 import tkinter.messagebox as messagebox
+from tkinter import ttk
+import ctypes
+import ctypes.wintypes
 
 
 def main(window_title: Optional[str] = None) -> None:
@@ -125,6 +128,31 @@ def main(window_title: Optional[str] = None) -> None:
             ocr_text_var.set('まだテキストは検出されていません')
         root.after(300, update_ocr_text)
 
+    def get_window_titles() -> list[str]:
+        """
+        現在表示中のウィンドウタイトル一覧を取得します。
+        Returns:
+            list[str]: ウィンドウタイトルのリスト
+        """
+        titles = []
+        EnumWindows = ctypes.windll.user32.EnumWindows
+        EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
+        GetWindowText = ctypes.windll.user32.GetWindowTextW
+        GetWindowTextLength = ctypes.windll.user32.GetWindowTextLengthW
+        IsWindowVisible = ctypes.windll.user32.IsWindowVisible
+        def foreach(hwnd, lParam):
+            if IsWindowVisible(hwnd):
+                length = GetWindowTextLength(hwnd)
+                if length > 0:
+                    buff = ctypes.create_unicode_buffer(length + 1)
+                    GetWindowText(hwnd, buff, length + 1)
+                    title = buff.value.strip()
+                    if title:
+                        titles.append(title)
+            return True
+        EnumWindows(EnumWindowsProc(foreach), 0)
+        return sorted(set(titles))
+
     def show_settings_dialog() -> None:
         """
         簡易設定パネル（ダイアログ）を表示し、主要な設定値を編集できるようにする。
@@ -132,12 +160,10 @@ def main(window_title: Optional[str] = None) -> None:
         """
         from src.utils.config import Config
         config = Config()
+        window_titles = get_window_titles()
         settings_keys = [
             ("TARGET_WINDOW_TITLE", "ウィンドウタイトル", config.get("TARGET_WINDOW_TITLE", "LDPlayer")),
             ("CAPTURE_INTERVAL", "キャプチャ間隔（秒）", config.get("CAPTURE_INTERVAL", "1.0")),
-            ("OCR_LANGUAGE", "OCR言語", config.get("OCR_LANGUAGE", "jpn")),
-            ("BOUYOMI_ENABLED", "棒読みちゃん有効", config.get("BOUYOMI_ENABLED", "true")),
-            ("BOUYOMI_HOST", "棒読みちゃんホスト", config.get("BOUYOMI_HOST", "127.0.0.1")),
             ("BOUYOMI_PORT", "棒読みちゃんポート", config.get("BOUYOMI_PORT", "50001")),
             ("BOUYOMI_VOICE_TYPE", "棒読みちゃん声質", config.get("BOUYOMI_VOICE_TYPE", "0")),
         ]
@@ -148,28 +174,26 @@ def main(window_title: Optional[str] = None) -> None:
         entries = {}
         for i, (key, label, value) in enumerate(settings_keys):
             tk.Label(dialog, text=label, anchor='w').grid(row=i, column=0, padx=10, pady=8, sticky='w')
-            entry = tk.Entry(dialog, width=30)
-            entry.insert(0, value)
-            entry.grid(row=i, column=1, padx=10, pady=8)
-            entries[key] = entry
-        def on_save():
-            env_path = Path(__file__).parent.parent / ".env"
-            if env_path.exists():
-                with open(env_path, 'r', encoding='utf-8') as f:
-                    lines = f.readlines()
+            if key == "TARGET_WINDOW_TITLE":
+                combo = ttk.Combobox(dialog, values=window_titles, width=28, state="readonly")
+                combo.set(value)
+                combo.grid(row=i, column=1, padx=10, pady=8)
+                entries[key] = combo
             else:
-                lines = []
-            env_dict = {}
-            for line in lines:
-                if '=' in line and not line.strip().startswith('#'):
-                    k, v = line.split('=', 1)
-                    env_dict[k.strip()] = v.strip().split('#')[0].strip()
+                entry = tk.Entry(dialog, width=30)
+                entry.insert(0, value)
+                entry.grid(row=i, column=1, padx=10, pady=8)
+                entries[key] = entry
+        def on_save():
             for key, _, _ in settings_keys:
-                env_dict[key] = entries[key].get()
-            with open(env_path, 'w', encoding='utf-8') as f:
-                for k, v in env_dict.items():
-                    f.write(f"{k}={v}\n")
-            messagebox.showinfo('情報', '設定を保存しました。再起動で反映されます。')
+                config[key] = entries[key].get()
+            config.save()
+            # タイトルラベルを即時更新
+            title_var.set(f'ターゲットウィンドウ: {config.get("TARGET_WINDOW_TITLE", "(未設定)")}')
+            # OCRスレッドを再起動して設定を即時反映
+            on_stop()
+            on_start()
+            messagebox.showinfo('情報', '設定を保存し即時反映しました。')
             dialog.destroy()
         def on_cancel():
             dialog.destroy()
