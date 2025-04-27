@@ -8,6 +8,7 @@ import socket
 import struct
 import time
 from typing import Dict, Optional, Tuple
+from src.utils.message_log import save_message_log
 
 class BouyomiClient:
     """棒読みちゃんクライアントクラス。
@@ -83,6 +84,7 @@ class BouyomiClient:
                 if result:
                     if attempt > 1:
                         self.logger.info(f"リトライ{attempt-1}回目で復旧成功: {text}")
+                    save_message_log(text)
                     return True
                 else:
                     raise ConnectionError("送信失敗")
@@ -126,6 +128,7 @@ class BouyomiClient:
                     self.logger.debug(f"送信バイト列: {packet}")
                     sock.sendall(packet)
                 self.logger.info(f"棒読みちゃん本体にバイナリコマンド送信: {text}")
+                save_message_log(text)
                 if attempt > 1:
                     self.logger.info(f"リトライ{attempt-1}回目で復旧成功: {text}")
                 return True
