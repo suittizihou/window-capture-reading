@@ -175,3 +175,9 @@ cython_debug/
 
 # Cursor MCP Server related
 .cursor/mcp.json
+
+# ログファイル
+message_log.txt
+
+# 設定ファイル
+settings.json
