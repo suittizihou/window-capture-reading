@@ -74,10 +74,13 @@ python -m src.main
 ---
 
 ## 詳細ガイド
-- [docs/setup_guide.md](docs/setup_guide.md) ... 棒読みちゃんセットアップ・連携
+- [docs/setup_guide.md](docs/setup_guide.md) ... セットアップガイド
 - [docs/tesseract_setup.md](docs/tesseract_setup.md) ... Tesseract OCRセットアップ
 - [docs/bouyomi_setup.md](docs/bouyomi_setup.md) ... 棒読みちゃん詳細設定
 - [docs/environment_setup.md](docs/environment_setup.md) ... .env/環境設定例
+- [docs/gui_usage.md](docs/gui_usage.md) ... GUI使用方法
+- [docs/exe_build.md](docs/exe_build.md) ... 実行ファイル（EXE）ビルド方法
+- [docs/update_history.md](docs/update_history.md) ... 更新履歴
 
 ---
 
