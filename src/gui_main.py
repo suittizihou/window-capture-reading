@@ -522,11 +522,13 @@ def main(window_title: Optional[str] = None) -> None:
             config.save()
             # タイトルラベルを即時更新
             title_var.set(f'ターゲットウィンドウ: {config.get("TARGET_WINDOW_TITLE", "(未設定)")}')
-            # OCRスレッドを再起動して設定を即時反映
+            # OCR・キャプチャスレッドを再起動して設定を即時反映
             on_stop()
-            on_start()
-            messagebox.showinfo('情報', '設定を保存し即時反映しました。')
-            dialog.destroy()
+            # 最新のウィンドウタイトルをConfigから取得してmain関数を再呼び出し
+            root.destroy()
+            # 再起動（新しいウィンドウタイトルで）
+            from src.gui_main import main as gui_main_entry
+            gui_main_entry(window_title=config.get("TARGET_WINDOW_TITLE", "LDPlayer"))
         def on_cancel():
             dialog.destroy()
         save_btn = tk.Button(dialog, text='保存', width=10, command=on_save)
