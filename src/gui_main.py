@@ -20,6 +20,9 @@ from src.services.window_capture import WindowCapture
 import textwrap
 from tkinter import filedialog
 import sys
+import datetime
+from src.services.ocr_service import OCRService
+from src.utils.config import Config
 
 # グローバル変数の初期化
 roi = None  # ROI矩形座標 [x1, y1, x2, y2]
