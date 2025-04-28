@@ -30,20 +30,13 @@ jobs:
         run: |
           pyinstaller --noconfirm --onefile --windowed --name WindowCaptureReading --add-data "src;src" src/gui_main.py --distpath dist
 
-      - name: リリース作成または取得
-        id: create_release
+      - name: リリース作成とEXEファイルアップロード
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: EXEファイルをリリースにアップロード
-        uses: softprops/action-gh-release@v2
-        with:
           files: dist/WindowCaptureReading.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
