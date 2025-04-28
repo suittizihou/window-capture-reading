@@ -1,0 +1,46 @@
+name: Build and Release EXE
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+
+      - name: Pythonセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 依存パッケージインストール
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: exeビルド（PyInstaller）
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name WindowCaptureReading src/gui_main.py
+
+      - name: リリース作成または取得
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: exeファイルをリリースにアップロード
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/WindowCaptureReading.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
