@@ -7,6 +7,7 @@ import sys
 import signal
 import time
 import logging
+import winsound
 from typing import Dict, Any, Optional, List, Set, Tuple, Callable
 import threading
 
@@ -99,27 +100,15 @@ def run_main_loop(running_flag: Callable[[], bool]) -> None:
                     if has_difference:
                         logger.info(f"画面の変化を検知しました: スコア {diff_score:.4f}")
                         
-                        # Windows通知を表示
+                        # 通知音を鳴らす
                         if notification_sound:
                             try:
-                                # Windows 10/11向けの通知
-                                from win10toast import ToastNotifier
-                                
-                                notification_title = config.get("NOTIFICATION_TITLE", "画面の変化を検知しました")
-                                toaster = ToastNotifier()
-                                toaster.show_toast(
-                                    notification_title,
-                                    f"差異スコア: {diff_score:.4f}",
-                                    duration=3,
-                                    threaded=True
-                                )
-                            except ImportError:
-                                # 通知ライブラリがない場合はビープ音のみ
-                                import winsound
-                                winsound.Beep(1000, 200)  # 1000Hz, 200ミリ秒
-                                logger.warning("win10toast がインストールされていないため、ビープ音による通知を使用します")
+                                # ビープ音で通知
+                                beep_frequency = int(config.get("NOTIFICATION_BEEP_FREQUENCY", "1000"))  # デフォルト 1000Hz
+                                beep_duration = int(config.get("NOTIFICATION_BEEP_DURATION", "200"))     # デフォルト 200ミリ秒
+                                winsound.Beep(beep_frequency, beep_duration)
                             except Exception as e:
-                                logger.error(f"通知の表示中にエラーが発生しました: {e}", exc_info=True)
+                                logger.error(f"通知音の再生中にエラーが発生しました: {e}", exc_info=True)
                 
                 elapsed_time = time.time() - loop_start_time
                 if elapsed_time < capture_interval and running_flag() and (not difference_detector or not difference_detector.is_shutting_down.is_set()):
