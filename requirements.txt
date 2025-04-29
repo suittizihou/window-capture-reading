@@ -2,6 +2,7 @@
 Pillow==10.2.0
 opencv-python==4.9.0.80
 numpy<2.0.0
+scikit-image==0.22.0
 
 # OCR
 pytesseract==0.3.10
@@ -21,3 +22,6 @@ pytest-cov==4.1.0
 black==24.2.0
 isort==5.13.2
 flake8==7.0.0
+
+# Notifications
+win10toast==0.9
