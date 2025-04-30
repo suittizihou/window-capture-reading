@@ -1,0 +1,56 @@
+name: Check Licenses
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'requirements.txt'
+      - 'setup.py'
+      - 'pyproject.toml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'requirements.txt'
+      - 'setup.py'
+      - 'pyproject.toml'
+  # 手動実行も可能にする
+  workflow_dispatch:
+
+jobs:
+  check-licenses:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pip-licenses
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        
+    - name: Run license check
+      run: |
+        python scripts/check_licenses.py
+        
+    - name: Upload LICENSES.md as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: licenses-report
+        path: LICENSES.md
+        
+    - name: Commit updated LICENSES.md
+      # mainブランチへのプッシュまたは手動実行時のみ実行
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add LICENSES.md
+        # 変更がある場合のみコミット
+        git diff --staged --quiet || git commit -m "Update third-party licenses information"
+        git push 

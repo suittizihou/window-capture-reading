@@ -1,4 +1,4 @@
-# Image processing
+﻿# Image processing
 Pillow>=9.0
 opencv-python>=4.5
 numpy<2.0.0
@@ -22,3 +22,6 @@ pytest-cov==4.1.0
 black==24.2.0
 isort==5.13.2
 flake8==7.0.0
+
+# 開発ツール
+pip-licenses==4.3.3  # ライセンス管理用

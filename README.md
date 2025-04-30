@@ -70,7 +70,7 @@ python -m src.gui_main
 - [docs/environment_setup.md](docs/environment_setup.md) ... config.ini設定例
 - [docs/gui_usage.md](docs/gui_usage.md) ... GUI使用方法
 - [docs/exe_build.md](docs/exe_build.md) ... 実行ファイル（EXE）ビルド方法
-- [docs/update_history.md](docs/update_history.md) ... 更新履歴
+- [docs/license_compliance.md](docs/license_compliance.md) ... ライセンスコンプライアンスガイド
 
 ---
 
@@ -82,12 +82,28 @@ src/        ... アプリ本体
 config/     ... 設定ファイル
 resources/  ... 静的リソース
 tests/      ... ユニットテスト
+scripts/    ... ユーティリティスクリプト
 ```
 
 ---
 
 ## ライセンス
-MIT
+本プロジェクトはMITライセンスで提供されています。詳細は[LICENSE](LICENSE)ファイルを参照してください。
+
+### サードパーティライセンス
+このプロジェクトは多数のオープンソースライブラリを使用しています。
+使用しているライブラリのライセンス情報は[LICENSES.md](LICENSES.md)ファイルにまとめられています。
+
+ライセンス情報の更新は以下のコマンドで行えます：
+```powershell
+pip install pip-licenses
+python scripts/check_licenses.py
+```
+
+リリース前のライセンスチェックなど:
+```powershell
+python scripts/pre_release_check.py
+```
 
 ---
 

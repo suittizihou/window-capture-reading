@@ -1,16 +1,38 @@
 [build-system]
-requires = ["setuptools>=42"]
+requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "window-capture-reading"
-version = "0.1.0"
-description = "ウィンドウキャプチャとテキスト読み取りを行うアプリケーション"
-authors = [
-    {name = "suittizihou"}
-]
+version = "2.1.0"
+description = "ウィンドウの画面変化を検出し通知音を出力するツール"
 readme = "README.md"
+authors = [
+    {name = "suittizihou", email = "example@example.com"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+]
 requires-python = ">=3.11"
+
+[project.urls]
+"Homepage" = "https://github.com/suittizihou/window-capture-reading"
+"Bug Tracker" = "https://github.com/suittizihou/window-capture-reading/issues"
+"Documentation" = "https://github.com/suittizihou/window-capture-reading/tree/main/docs"
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.licenses]
+ignore-packages = ["pip", "setuptools", "wheel", "pkg-resources"]
+license-map = [
+    {name = "pillow", license = "HPND"},
+    {name = "numpy", license = "BSD-3-Clause"},
+    {name = "opencv-python", license = "MIT"},
+]
 
 [tool.pytest.ini_options]
 pythonpath = [
