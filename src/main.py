@@ -1,5 +1,5 @@
 """
-ウィンドウのテキストを読み上げるメインアプリケーション
+ウィンドウの画面差異検知メインアプリケーション
 """
 
 import os
@@ -7,6 +7,7 @@ import sys
 import signal
 import time
 import logging
+import winsound
 from typing import Dict, Any, Optional, List, Set, Tuple, Callable
 import threading
 
@@ -14,16 +15,14 @@ import cv2
 import numpy as np
 
 from src.services.window_capture import WindowCapture
-from src.services.ocr_service import OCRService
-from src.services.bouyomi_client import BouyomiClient
+from src.services.difference_detector import DifferenceDetector
 from src.services.memory_watcher import MemoryWatcher
 from src.utils.config import Config
 from src.utils.logging_config import setup_logging
 
 # グローバル変数
 config: Config = None
-ocr_service: OCRService = None
-bouyomi_client: BouyomiClient = None
+difference_detector: Optional[DifferenceDetector] = None
 window_capture: WindowCapture = None
 memory_watcher: Optional[MemoryWatcher] = None
 running: bool = True
@@ -42,76 +41,80 @@ def signal_handler(sig: int, frame: Any) -> None:
     # 終了フラグを設定
     running = False
 
-    # まず最初にOCRサービスの終了フラグを設定
-    if ocr_service:
-        ocr_service.is_shutting_down.set()
-
-    # 棒読みちゃんクライアントの終了処理
-    logger.info("棒読みちゃんクライアントを終了しています...")
-    if bouyomi_client:
-        bouyomi_client.close()
-        
-    # OCRサービスの終了処理
-    logger.info("OCRサービスを終了しています...")
-    if ocr_service:
-        # 終了フラグはすでに設定済み、shutdown処理を実行
-        ocr_service.shutdown()
+    # 差異検出サービスの終了処理
+    logger.info("差異検出サービスを終了しています...")
+    if difference_detector:
+        difference_detector.shutdown()
 
 def run_main_loop(running_flag: Callable[[], bool]) -> None:
     """
-    OCR・読み上げメインループを外部から制御可能な関数として実行します。
+    画面差異検知メインループを外部から制御可能な関数として実行します。
 
     Args:
         running_flag: ループ継続判定用のコール可能オブジェクト（例: lambda: True/False）
     """
-    global config, ocr_service, bouyomi_client, window_capture, memory_watcher
+    global config, difference_detector, window_capture, memory_watcher
     setup_logging()
     logger = logging.getLogger()
     logger.info("メインループを開始します (GUI制御)")
     config = Config()
     window_capture = WindowCapture(config.get("TARGET_WINDOW_TITLE", "LDPlayer"))
-    ocr_service = OCRService(config)
-    bouyomi_client = BouyomiClient(config)
+    difference_detector = DifferenceDetector(config)
+    
     if config.get("MEMORY_WATCHER_ENABLED", "false").lower() == "true":
         memory_watcher = MemoryWatcher(config)
         memory_watcher.start()
         logger.info("メモリ監視を開始しました")
-    last_text: str = ""
-    ignore_texts: Set[str] = set()
+    
     capture_interval = float(config.get("CAPTURE_INTERVAL", "1.0"))
+    notification_sound = config.get("NOTIFICATION_SOUND", "true").lower() == "true"
+    
     try:
         while running_flag():
             loop_start_time = time.time()
             try:
-                if ocr_service and ocr_service.is_shutting_down.is_set():
+                # 差異検出サービスが終了中なら待機
+                if difference_detector and difference_detector.is_shutting_down.is_set():
                     time.sleep(0.1)
                     continue
+                
                 frame = window_capture.capture()
                 if frame is None:
                     logger.warning("ウィンドウのキャプチャに失敗しました。次のフレームを試みます...")
                     time.sleep(capture_interval)
                     continue
-                if ocr_service and ocr_service.is_shutting_down.is_set():
+                
+                # 差異検出サービスが終了中なら待機
+                if difference_detector and difference_detector.is_shutting_down.is_set():
                     continue
-                if ocr_service and not ocr_service.is_shutting_down.is_set():
-                    text = ocr_service.extract_text(frame)
-                    if ocr_service.is_shutting_down.is_set():
+                
+                # 画像の差異を検出
+                if difference_detector and not difference_detector.is_shutting_down.is_set():
+                    has_difference, debug_image, diff_score = difference_detector.compare_frames(frame)
+                    
+                    # 差異検出サービスが終了中なら待機
+                    if difference_detector.is_shutting_down.is_set():
                         continue
-                    if text and text != last_text and text not in ignore_texts:
-                        logger.info(f"抽出されたテキスト: {text}")
-                        last_text = text
-                        if bouyomi_client:
-                            bouyomi_client.talk(text)
-                            ignore_limit = int(config.get("IGNORE_TEXT_LIMIT", "10"))
-                            if ignore_limit > 0:
-                                ignore_texts.add(text)
-                                if len(ignore_texts) > ignore_limit:
-                                    ignore_texts.pop()
+                    
+                    # 差異がある場合は通知
+                    if has_difference:
+                        logger.info(f"画面の変化を検知しました: スコア {diff_score:.4f}")
+                        
+                        # 通知音を鳴らす
+                        if notification_sound:
+                            try:
+                                # ビープ音で通知
+                                beep_frequency = int(config.get("NOTIFICATION_BEEP_FREQUENCY", "1000"))  # デフォルト 1000Hz
+                                beep_duration = int(config.get("NOTIFICATION_BEEP_DURATION", "200"))     # デフォルト 200ミリ秒
+                                winsound.Beep(beep_frequency, beep_duration)
+                            except Exception as e:
+                                logger.error(f"通知音の再生中にエラーが発生しました: {e}", exc_info=True)
+                
                 elapsed_time = time.time() - loop_start_time
-                if elapsed_time < capture_interval and running_flag() and (not ocr_service or not ocr_service.is_shutting_down.is_set()):
+                if elapsed_time < capture_interval and running_flag() and (not difference_detector or not difference_detector.is_shutting_down.is_set()):
                     time.sleep(capture_interval - elapsed_time)
             except Exception as e:
-                if running_flag() and (not ocr_service or not ocr_service.is_shutting_down.is_set()):
+                if running_flag() and (not difference_detector or not difference_detector.is_shutting_down.is_set()):
                     logger.error(f"メインループでエラーが発生しました: {e}", exc_info=True)
                     time.sleep(1)
                 else:
@@ -121,13 +124,13 @@ def run_main_loop(running_flag: Callable[[], bool]) -> None:
     except Exception as e:
         logger.error(f"メインループ実行中にエラーが発生しました: {e}", exc_info=True)
     finally:
-        if ocr_service:
-            ocr_service.is_shutting_down.set()
+        if difference_detector:
+            difference_detector.is_shutting_down.set()
             try:
-                ocr_service.shutdown()
-                logger.info("OCRサービスの終了処理が完了しました")
+                difference_detector.shutdown()
+                logger.info("差異検出サービスの終了処理が完了しました")
             except Exception as e:
-                logger.error(f"OCRサービスの終了処理中にエラーが発生しました: {e}")
+                logger.error(f"差異検出サービスの終了処理中にエラーが発生しました: {e}")
         if memory_watcher:
             try:
                 memory_watcher.stop()

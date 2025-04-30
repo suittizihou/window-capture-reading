@@ -38,6 +38,9 @@ class OCRService:
         """
         self.logger = logging.getLogger(__name__)
         
+        # 設定オブジェクトを保存
+        self.config = config
+        
         # Tesseractの設定
         self.tesseract_path = config.get("TESSERACT_PATH", r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe")
         self.tesseract_lang = config.get("TESSERACT_LANG", "jpn")

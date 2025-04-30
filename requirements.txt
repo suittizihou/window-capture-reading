@@ -2,6 +2,7 @@
 Pillow==10.2.0
 opencv-python==4.9.0.80
 numpy<2.0.0
+scikit-image==0.22.0
 
 # OCR
 pytesseract==0.3.10
