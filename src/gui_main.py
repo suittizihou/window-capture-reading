@@ -21,15 +21,14 @@ import textwrap
 from tkinter import filedialog
 import sys
 import datetime
-# OCR関連のインポートを無効化
-# from src.services.ocr_service import OCRService
-from src.utils.config import Config
+from src.utils.config import Config, get_config
 from src.services.difference_detector import DifferenceDetector
 
 # グローバル変数の初期化
 roi = None  # ROI矩形座標 [x1, y1, x2, y2]
 prev_image = None  # 前回のキャプチャ画像
 diff_preview_img = None  # 差分プレビュー用画像を保持
+detector = None  # 差分検知器
 
 # 省略表示用関数を追加
 MAX_TITLE_DISPLAY_LENGTH = 24  # 表示上限（全角換算で調整可）
@@ -90,9 +89,9 @@ def ellipsize(text: str, max_length: int = MAX_TITLE_DISPLAY_LENGTH) -> str:
 
 def main(window_title: Optional[str] = None) -> None:
     """
-    Tkinterで実装したOCRテキストライブプレビュー付きGUI。
+    Tkinterで実装したGUI。
     - 画面キャプチャとプレビューを常時表示
-    - Start/Stopボタンでテキスト認識と読み上げを制御
+    - Start/Stopボタンで差分検知と通知を制御
     - ステータスバーでシステム状態を表示
 
     Args:
@@ -101,9 +100,8 @@ def main(window_title: Optional[str] = None) -> None:
     setup_logging()
     logger = logging.getLogger(__name__)
     
-    # 設定をグローバル変数として保持
-    global app_config
-    app_config = Config()
+    # 設定を初期化（必要に応じてグローバル変数を使用）
+    config = get_config()
     
     root = tk.Tk()
     root.title('Window Capture Reading')
@@ -122,7 +120,7 @@ def main(window_title: Optional[str] = None) -> None:
         default_dir = os.path.abspath(os.path.dirname(__file__))
 
     def menu_save_config():
-        global app_config
+        config = get_config()
         path = filedialog.asksaveasfilename(
             defaultextension='.ini',
             filetypes=[('INI', '*.ini')],
@@ -131,12 +129,12 @@ def main(window_title: Optional[str] = None) -> None:
         )
         if path:
             # 現在の設定を保存
-            app_config.config_path = path
-            app_config.save()
+            config.config_path = path
+            config.save()
             messagebox.showinfo('設定保存完了', f'設定を {path} に保存しました。')
 
     def menu_load_config():
-        global app_config
+        config = get_config()
         path = filedialog.askopenfilename(
             defaultextension='.ini',
             filetypes=[('INI', '*.ini')],
@@ -146,15 +144,15 @@ def main(window_title: Optional[str] = None) -> None:
         if path:
             try:
                 # 選択されたファイルを読み込む
-                app_config.config_parser.read(path, encoding='utf-8')
+                config.config_parser.read(path, encoding='utf-8')
                 # 保存
-                app_config.save()
+                config.save()
                 
                 # 再起動して反映
                 messagebox.showinfo('設定読み込み完了', '設定を読み込みました。アプリケーションを再起動します。')
                 
                 # ウィンドウタイトルをWindowセクションから取得
-                main_title = app_config.get('TARGET_WINDOW_TITLE', 'LDPlayer')
+                main_title = config.get('TARGET_WINDOW_TITLE', 'LDPlayer')
                 
                 # アプリケーション再起動
                 root.destroy()
@@ -314,15 +312,16 @@ def main(window_title: Optional[str] = None) -> None:
 
     def on_capture_diff() -> None:
         """画面の差分を検知して表示する"""
-        global roi, prev_image, diff_preview_img, app_config, detector
+        global roi, prev_image, diff_preview_img, detector
         
-        window_name = window_title or app_config.get("TARGET_WINDOW_TITLE", "LDPlayer")
+        config = get_config()
+        window_name = window_title or config.get("TARGET_WINDOW_TITLE", "LDPlayer")
         window_capture = WindowCapture(window_name)
         
         # 差分検知器の更新 - 設定が変更された場合に再生成
-        detector_threshold = float(app_config.get("DIFF_THRESHOLD", "0.05"))
+        detector_threshold = float(config.get("DIFF_THRESHOLD", "0.05"))
         if detector is None or detector.threshold != detector_threshold:
-            detector = DifferenceDetector(app_config)
+            detector = DifferenceDetector(config)
             logger.info(f"差分検知感度を{detector_threshold}に設定しました")
         
         frame = window_capture.capture()
@@ -654,17 +653,20 @@ def main(window_title: Optional[str] = None) -> None:
 
     def capture_loop():
         """画面キャプチャとプレビュー表示を行うループ"""
-        global roi, prev_image, diff_preview_img, app_config
-        nonlocal capture_thread
+        global roi, prev_image, diff_preview_img, detector
+        
+        config = get_config()
+        capture_running = threading.Event()
+        capture_running.set()
+        capture_thread = threading.current_thread()
         window_capture = None
-        detector = None  # 差分検知器（必要時に初期化）
-        logger.info("キャプチャループを開始")
+        
         try:
             while capture_running.is_set():
-                window_name = app_config.get("TARGET_WINDOW_TITLE", "LDPlayer")
+                window_name = config.get("TARGET_WINDOW_TITLE", "LDPlayer")
                 capture_interval = 1.0
                 try:
-                    capture_interval = float(app_config.get("CAPTURE_INTERVAL", "1.0"))
+                    capture_interval = float(config.get("CAPTURE_INTERVAL", "1.0"))
                 except Exception:
                     pass
                 if window_capture is None or window_capture.window_title != window_name:
@@ -672,9 +674,9 @@ def main(window_title: Optional[str] = None) -> None:
                     window_capture = WindowCapture(window_name)
                 
                 # 差分検知器の更新 - 設定が変更された場合に再生成
-                detector_threshold = float(app_config.get("DIFF_THRESHOLD", "0.05"))
+                detector_threshold = float(config.get("DIFF_THRESHOLD", "0.05"))
                 if detector is None or detector.threshold != detector_threshold:
-                    detector = DifferenceDetector(app_config)
+                    detector = DifferenceDetector(config)
                     logger.info(f"差分検知感度を{detector_threshold}に設定しました")
                 
                 frame = window_capture.capture()
@@ -750,77 +752,67 @@ def main(window_title: Optional[str] = None) -> None:
             capture_thread = None
 
     def diff_detection_loop():
-        """差分検知と通知を行うループ - OCRループの代わりに使用"""
-        global roi, prev_image, app_config
-        nonlocal ocr_thread
+        """
+        差分検知のメインループ。
+        """
+        global prev_image, diff_preview_img
         
-        # 通知管理用の変数
+        config = get_config()
+        logger = logging.getLogger(__name__)
+        
+        # 前回の通知時刻を記録
         last_notification_time = 0
-        notification_cooldown = float(app_config.get("NOTIFICATION_COOLDOWN", "2.0"))  # 通知の連続発生を防ぐためのクールダウン（秒）
-        last_diff_text = ""  # 最後に通知したテキスト
-        sound_playing = False  # 通知音再生中フラグ
-        change_during_playback = False  # 再生中に変化があったフラグ
-        sound_duration = 3.0  # 通知音の推定再生時間（秒）- 余裕を持たせる
-        last_change_time = 0  # 最後の変化が検知された時刻
+        # インターバル中に差分が検知されたかのフラグ
+        diff_detected_during_cooldown = False
         
-        logger.info("差分検知ループを開始")
-        try:
-            while running.is_set():
-                # 差分検知の結果を取得
-                current_text = ocr_text_var.get()
+        while running.is_set():
+            try:
+                # 前回の画像がない場合はスキップ
+                if prev_image is None:
+                    time.sleep(0.1)
+                    continue
+                
                 current_time = time.time()
+                notification_cooldown = float(config.get('NOTIFICATION_COOLDOWN', '2.0'))
                 
-                # 音の再生状態を更新
-                if sound_playing and current_time - last_notification_time > sound_duration:
-                    sound_playing = False
-                    # 再生中に変化があった場合、再度通知音を再生
-                    if change_during_playback:
-                        # 通知設定が有効な場合のみ再生
-                        if app_config.get("NOTIFICATION_SOUND", "true").lower() == "true":
-                            # 通知音再生
-                            play_notification_sound()
-                            last_notification_time = current_time
-                            sound_playing = True
-                            change_during_playback = False
-                            logger.info("再生中の変化を検知したため、通知音を再生します")
-                
-                # 「差分を検出しました」が含まれる場合の処理
-                if "差分を検出しました" in current_text and current_text != last_diff_text:
-                    last_diff_text = current_text  # 検出テキストを更新
-                    last_change_time = current_time  # 変化検知時刻を記録
+                # 差分を検知
+                if diff_preview_img is not None:
+                    diff_result = detector.detect_difference(prev_image, diff_preview_img)
                     
-                    # 通知音の再生状態に応じて処理を分岐
-                    if sound_playing:
-                        # 再生中は変化フラグを立てるだけ
-                        change_during_playback = True
-                        logger.info(f"通知音再生中に画面変化を検知: {current_text}")
-                    else:
-                        # 再生中でなければ、クールダウン確認後に通知音を再生
-                        if current_time - last_notification_time > notification_cooldown:
-                            # 通知設定が有効な場合のみ再生
-                            if app_config.get("NOTIFICATION_SOUND", "true").lower() == "true":
-                                # 通知音再生
+                    if diff_result[0]:  # has_difference
+                        # インターバル中かどうかチェック
+                        if current_time - last_notification_time < notification_cooldown:
+                            # インターバル中なので、検知フラグをオンにするだけ
+                            diff_detected_during_cooldown = True
+                        else:
+                            # インターバル終了後、または最初の差分検知時
+                            
+                            # 通知音を再生（設定が有効な場合）
+                            if config.get('NOTIFICATION_SOUND', 'true').lower() == 'true':
                                 play_notification_sound()
-                                # 通知時刻を更新
-                                last_notification_time = current_time
-                                sound_playing = True
-                                
-                                # ログにも記録
-                                logger.info(f"画面変化を検知: {current_text}")
+                            
+                            # 通知時刻を更新
+                            last_notification_time = current_time
+                            # 検知フラグをリセット
+                            diff_detected_during_cooldown = False
                 
-                # 最後の変化から一定時間経過後も変化がない場合、変化が止まったとみなす
-                elif sound_playing and change_during_playback and current_time - last_change_time > 1.0:
-                    # 再生中のフラグを明示的に確認
-                    if current_time - last_notification_time <= sound_duration:
-                        logger.info("変化が安定したため、再生終了を待機します")
+                # インターバル中の差分検知フラグがあり、インターバルが終了した場合
+                elif diff_detected_during_cooldown and current_time - last_notification_time >= notification_cooldown:
+                    # 通知音を再生（設定が有効な場合）
+                    if config.get('NOTIFICATION_SOUND', 'true').lower() == 'true':
+                        play_notification_sound()
+                    
+                    # 通知時刻を更新
+                    last_notification_time = current_time
+                    # 検知フラグをリセット
+                    diff_detected_during_cooldown = False
                 
-                time.sleep(0.5)
-        except Exception as e:
-            logger.error(f"差分検知ループでエラー発生: {e}", exc_info=True)
-        finally:
-            logger.info("差分検知ループを終了")
-            ocr_thread = None
-            set_status('Stopped')
+                # 短い待機時間
+                time.sleep(0.1)
+                
+            except Exception as e:
+                logger.error(f"差分検知処理でエラーが発生しました: {e}", exc_info=True)
+                time.sleep(1.0)  # エラー時は少し待機
 
     def get_window_titles() -> list[str]:
         """
@@ -847,147 +839,181 @@ def main(window_title: Optional[str] = None) -> None:
         EnumWindows(EnumWindowsProc(foreach), 0)
         return sorted(set(titles))
 
+    def create_settings_ui(tab, settings_list, entries_dict, config):
+        """設定項目のUIを作成する"""
+        for i, (key, label, input_type, *args) in enumerate(settings_list):
+            frame = ttk.Frame(tab)
+            frame.pack(fill='x', padx=5, pady=2)
+            
+            # ラベル
+            ttk.Label(frame, text=label).pack(side='left', padx=5)
+            
+            # 入力ウィジェット
+            if input_type == 'entry':
+                entry = ttk.Entry(frame)
+                entry.insert(0, config.get(key, ''))
+                entry.pack(side='right', padx=5)
+                entries_dict[key] = entry
+            
+            elif input_type == 'checkbox':
+                var = tk.BooleanVar(value=config.get(key, 'false').lower() == 'true')
+                checkbox = ttk.Checkbutton(frame, variable=var)
+                checkbox.pack(side='right', padx=5)
+                entries_dict[key] = var
+            
+            elif input_type == 'combobox':
+                values = args[0] if args else []
+                combo = ttk.Combobox(frame, values=values, state='readonly')
+                current_value = config.get(key, '')
+                if current_value in values:
+                    combo.set(current_value)
+                elif values:
+                    combo.set(values[0])
+                combo.pack(side='right', padx=5)
+                entries_dict[key] = combo
+            
+            elif input_type == 'scale':
+                min_val, max_val = args[0] if args else (0, 100)
+                frame.pack_forget()  # スケール用に特別なレイアウト
+                
+                scale_frame = ttk.Frame(tab)
+                scale_frame.pack(fill='x', padx=5, pady=2)
+                
+                ttk.Label(scale_frame, text=label).pack(side='left', padx=5)
+                
+                # パーセンテージ表示用ラベル
+                percentage_label = ttk.Label(scale_frame, text="0%")
+                percentage_label.pack(side='right', padx=5)
+                
+                # スケール
+                scale = ttk.Scale(scale_frame, from_=min_val, to=max_val, orient='horizontal')
+                current_value = float(config.get(key, '0.05')) * 100
+                scale.set(current_value)
+                scale.pack(side='right', fill='x', expand=True, padx=5)
+                entries_dict[key] = scale
+                
+                # スケールの値が変更されたときの処理
+                def on_slider_change(event):
+                    current_value = scale.get()
+                    current_percentage = int(float(current_value))
+                    percentage_label.config(text=f"{current_percentage}%")
+                
+                scale.bind('<Motion>', on_slider_change)
+                scale.bind('<ButtonRelease-1>', on_slider_change)
+                
+                # 初期値を表示
+                on_slider_change(None)
+
     def show_settings_dialog() -> None:
         """
-        簡易設定パネル（ダイアログ）を表示し、主要な設定値を編集できるようにする。
+        設定ダイアログを表示する。
         """
-        global app_config
-        
-        dialog = tk.Toplevel(root)
+        config = get_config()
+        dialog = tk.Toplevel()
         dialog.title('設定')
         dialog.geometry('500x400')
         dialog.resizable(False, False)
-        dialog.transient(root)  # モーダルダイアログに
-        dialog.grab_set()
         
         # ダイアログを親ウィンドウの中央に配置
-        dialog.withdraw()  # 一時的に非表示
-        # ウィンドウサイズを取得
-        dialog_width = 500
-        dialog_height = 400
-        # 親ウィンドウの位置とサイズを取得
-        root_x = root.winfo_x()
-        root_y = root.winfo_y()
-        root_width = root.winfo_width()
-        root_height = root.winfo_height()
-        # ダイアログの位置を計算（親ウィンドウの中央）
-        x = root_x + (root_width - dialog_width) // 2
-        y = root_y + (root_height - dialog_height) // 2
-        # 位置を設定して表示
-        dialog.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
-        dialog.deiconify()  # 再表示
+        dialog.transient(dialog.master)
+        dialog.grab_set()
         
-        # タブコントロールを作成
+        def center_dialog():
+            dialog.update_idletasks()
+            parent = dialog.master
+            parent_x = parent.winfo_x()
+            parent_y = parent.winfo_y()
+            parent_width = parent.winfo_width()
+            parent_height = parent.winfo_height()
+            dialog_width = dialog.winfo_width()
+            dialog_height = dialog.winfo_height()
+            
+            x = parent_x + (parent_width - dialog_width) // 2
+            y = parent_y + (parent_height - dialog_height) // 2
+            dialog.geometry(f'+{x}+{y}')
+        
+        # タブコントロールの作成
         tab_control = ttk.Notebook(dialog)
         
-        # 各セクションのタブを作成
+        # ウィンドウ設定タブ
         window_tab = ttk.Frame(tab_control)
-        diff_tab = ttk.Frame(tab_control)
-        notify_tab = ttk.Frame(tab_control)
-        
-        # タブを追加
         tab_control.add(window_tab, text='ウィンドウ')
-        tab_control.add(diff_tab, text='差分検知')
-        tab_control.add(notify_tab, text='通知')
         
-        tab_control.pack(expand=1, fill='both', padx=10, pady=10)
+        # 差分検知タブ
+        difference_tab = ttk.Frame(tab_control)
+        tab_control.add(difference_tab, text='差分検知')
         
-        # 設定リスト（タブごとに管理）
-        settings = {
-            'Window': [
-                ("TARGET_WINDOW_TITLE", "ウィンドウタイトル", app_config.get("TARGET_WINDOW_TITLE", "LDPlayer")),
-                ("CAPTURE_INTERVAL", "キャプチャ間隔（秒）", app_config.get("CAPTURE_INTERVAL", "1.0")),
-            ],
-            'Difference': [
-                ("DIFF_THRESHOLD", "差分検知感度", app_config.get("DIFF_THRESHOLD", "0.05")),
-                ("DIFF_DEBUG_MODE", "デバッグモード", app_config.get("DIFF_DEBUG_MODE", "false")),
-            ],
-            'Notification': [
-                ("NOTIFICATION_SOUND", "通知音", app_config.get("NOTIFICATION_SOUND", "true")),
-                ("NOTIFICATION_COOLDOWN", "通知クールダウン（秒）", app_config.get("NOTIFICATION_COOLDOWN", "2.0")),
-            ]
-        }
+        # 通知タブ
+        notification_tab = ttk.Frame(tab_control)
+        tab_control.add(notification_tab, text='通知')
         
-        # 入力欄を作成
-        entries = {}
+        tab_control.pack(expand=True, fill='both', padx=5, pady=5)
         
-        def create_settings_ui(tab, settings_list, entries_dict):
-            for i, (key, label, value) in enumerate(settings_list):
-                row_frame = tk.Frame(tab)
-                row_frame.pack(fill='x', padx=10, pady=5)
-                
-                label = tk.Label(row_frame, text=label, width=20, anchor='w')
-                label.pack(side='left')
-                
-                # 特定の設定項目はドロップダウンにする
-                if key == "TARGET_WINDOW_TITLE":
-                    # ウィンドウタイトルはシステムから取得した一覧から選択
-                    window_titles = get_window_titles()
-                    combo = ttk.Combobox(row_frame, width=38, values=window_titles)
-                    combo.pack(side='right', padx=5)
-                    combo.state(['readonly'])  # 編集不可（選択のみ）
-                    if value in window_titles:
-                        combo.set(value)
-                    else:
-                        combo.set(value)  # リストにない場合も現在値を表示
-                        # 現在値をリストに追加
-                        combo['values'] = list(combo['values']) + [value]
-                    entries_dict[key] = combo
-                elif key in ["DIFF_DEBUG_MODE", "NOTIFICATION_SOUND"]:
-                    # 真偽値はドロップダウンで選択
-                    combo = ttk.Combobox(row_frame, width=38, values=["true", "false"])
-                    combo.pack(side='right', padx=5)
-                    combo.set(value.lower())  # 小文字に正規化
-                    combo.state(['readonly'])  # 編集不可（選択のみ）
-                    entries_dict[key] = combo
-                else:
-                    # その他の項目はテキスト入力
-                    entry = tk.Entry(row_frame, width=40)
-                    entry.pack(side='right', padx=5)
-                    entry.insert(0, value)
-                    entries_dict[key] = entry
+        # 設定項目の辞書（キーと対応するウィジェットを保持）
+        entries_dict = {}
         
-        # ウィンドウタブの設定
-        create_settings_ui(window_tab, settings['Window'], entries)
+        # ウィンドウ設定
+        window_settings = [
+            ('TARGET_WINDOW_TITLE', 'ターゲットウィンドウ', 'combobox', get_window_titles()),
+            ('CAPTURE_INTERVAL', 'キャプチャ間隔（秒）', 'entry'),
+        ]
         
-        # 差分検知タブの設定
-        create_settings_ui(diff_tab, settings['Difference'], entries)
+        # 差分検知設定
+        difference_settings = [
+            ('DIFF_THRESHOLD', '差分検知感度', 'scale', (0, 100)),
+            ('DIFF_METHOD', '差分検知方式', 'combobox', ['ssim', 'mse']),
+            ('DIFF_MAX_HISTORY', '履歴保持数', 'entry'),
+            ('DIFF_DEBUG_MODE', 'デバッグモード', 'checkbox'),
+        ]
         
-        # 通知タブの設定
-        create_settings_ui(notify_tab, settings['Notification'], entries)
+        # 通知設定
+        notification_settings = [
+            ('NOTIFICATION_SOUND', '通知音を再生', 'checkbox'),
+            ('NOTIFICATION_COOLDOWN', '通知クールダウン（秒）', 'entry'),
+        ]
         
-        # 保存ボタン
+        # 各タブの設定項目を作成
+        create_settings_ui(window_tab, window_settings, entries_dict, config)
+        create_settings_ui(difference_tab, difference_settings, entries_dict, config)
+        create_settings_ui(notification_tab, notification_settings, entries_dict, config)
+        
         def on_save():
-            # 設定を保存
-            for key, entry in entries.items():
-                if isinstance(entry, ttk.Combobox):
-                    value = entry.get()
-                else:
-                    value = entry.get()
-                app_config.set(key, value)
-            
-            # 設定を保存
-            app_config.save()
-            
-            # ウィンドウタイトル更新
-            display_title = ellipsize(app_config.get("TARGET_WINDOW_TITLE", "(未設定)"))
-            title_var.set(f'ターゲットウィンドウ: {display_title}')
-            
-            dialog.destroy()
+            """設定を保存する"""
+            try:
+                for key, widget in entries_dict.items():
+                    if isinstance(widget, ttk.Entry):
+                        value = widget.get()
+                    elif isinstance(widget, tk.BooleanVar):
+                        value = str(widget.get()).lower()
+                    elif isinstance(widget, ttk.Combobox):
+                        value = widget.get()
+                    elif isinstance(widget, ttk.Scale):
+                        value = str(widget.get() / 100.0)
+                    
+                    config.set(key, str(value))
+                
+                config.save()
+                messagebox.showinfo('設定保存', '設定を保存しました。')
+                dialog.destroy()
+                
+            except Exception as e:
+                messagebox.showerror('エラー', f'設定の保存に失敗しました：{e}')
         
-        # キャンセルボタン
         def on_cancel():
+            """設定をキャンセルする"""
             dialog.destroy()
         
         # ボタンフレーム
-        btn_frame = tk.Frame(dialog)
-        btn_frame.pack(side='bottom', fill='x', padx=10, pady=10)
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(fill='x', padx=5, pady=5)
         
-        cancel_btn = tk.Button(btn_frame, text="キャンセル", command=on_cancel)
-        cancel_btn.pack(side='right', padx=5)
+        ttk.Button(button_frame, text='保存', command=on_save).pack(side='right', padx=5)
+        ttk.Button(button_frame, text='キャンセル', command=on_cancel).pack(side='right', padx=5)
         
-        ok_btn = tk.Button(btn_frame, text="保存", command=on_save)
-        ok_btn.pack(side='right', padx=5)
+        # ダイアログを中央に配置
+        center_dialog()
+        
+        dialog.wait_window()
 
     # キャプチャスレッドを開始
     capture_thread = threading.Thread(target=capture_loop, daemon=True)
