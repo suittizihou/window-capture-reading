@@ -30,8 +30,6 @@ class DifferenceDetector:
         
         # 設定から値を読み込む
         self.threshold = float(config.get("DIFF_THRESHOLD", "0.05"))
-        self.blur_size = int(config.get("DIFF_BLUR_SIZE", "5"))
-        self.min_area = int(config.get("DIFF_MIN_AREA", "100"))
         self.method = config.get("DIFF_METHOD", "ssim")
         self.cooldown = float(config.get("DIFF_COOLDOWN", "1.0"))
         self.max_history = int(config.get("DIFF_MAX_HISTORY", "10"))
@@ -161,11 +159,6 @@ class DifferenceDetector:
         diff = cv2.absdiff(prev_gray, current_gray)
         _, thresh = cv2.threshold(diff, int(self.threshold * 255), 255, cv2.THRESH_BINARY)
         
-        # ノイズ除去のためのブラー処理
-        if self.blur_size > 0:
-            thresh = cv2.GaussianBlur(thresh, (self.blur_size, self.blur_size), 0)
-            _, thresh = cv2.threshold(thresh, 127, 255, cv2.THRESH_BINARY)
-        
         # 膨張・収縮でノイズを除去
         kernel = np.ones((5, 5), np.uint8)
         dilated = cv2.dilate(thresh, kernel, iterations=1)
@@ -175,8 +168,8 @@ class DifferenceDetector:
         total_pixels = dilated.size
         diff_ratio = (diff_pixels / total_pixels) * 100
         
-        # 差分があるかどうかを判定
-        has_diff = diff_pixels > self.min_area
+        # 最小面積（100ピクセル）を超える場合は差分あり
+        has_diff = diff_pixels > 100
         
         # 差分画像の作成
         if has_diff or self.debug_mode:
@@ -231,11 +224,6 @@ class DifferenceDetector:
                 diff, int(self.threshold * 255), 255, cv2.THRESH_BINARY
             )
             
-            # ノイズ除去
-            if self.blur_size > 0:
-                thresh = cv2.GaussianBlur(thresh, (self.blur_size, self.blur_size), 0)
-                _, thresh = cv2.threshold(thresh, 127, 255, cv2.THRESH_BINARY)
-                
             # 輪郭検出
             contours, _ = cv2.findContours(
                 thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
@@ -247,39 +235,26 @@ class DifferenceDetector:
                 area = cv2.contourArea(contour)
                 total_area += area
             
-            # 差分があるかどうかを判定
-            has_diff = total_area > self.min_area
+            # 全体に対する割合を計算
+            total_pixels = prev_gray.size
+            diff_ratio = (total_area / total_pixels) * 100
             
-            # 差分割合を計算
-            total_pixels = thresh.size
-            diff_ratio = (total_area / total_pixels) * 100 if total_pixels > 0 else 0
+            # 最小面積（100ピクセル）を超える場合は差分あり
+            has_diff = total_area > 100
             
-            # 差分画像の作成
+            # デバッグモードまたは差分がある場合は視覚化
             if has_diff or self.debug_mode:
-                # カラー画像に戻して差分を可視化
+                # 結果画像を作成
                 result = current_cv.copy()
                 
-                # 差分が大きい領域を赤色で描画
+                # 差分領域を赤色で描画
                 cv2.drawContours(result, contours, -1, (0, 0, 255), 2)
                 
-                # 重要な領域に半透明の赤色オーバーレイを追加
-                overlay = result.copy()
-                for contour in contours:
-                    area = cv2.contourArea(contour)
-                    if area > self.min_area / 10:  # 小さすぎる領域は除外
-                        cv2.fillPoly(overlay, [contour], (0, 0, 255))
-                
-                # オーバーレイを半透明にして合成
-                alpha = 0.3
-                result = cv2.addWeighted(overlay, alpha, result, 1 - alpha, 0)
-                
-                # SSIM値とスコアを表示
-                if self.debug_mode:
-                    text = f"SSIM: {ssim_score:.4f}, Diff: {diff_ratio:.2f}%"
-                    cv2.putText(
-                        result, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 
-                        0.7, (0, 0, 255), 2
-                    )
+                # 各輪郭について矩形で囲む
+                for c in contours:
+                    if cv2.contourArea(c) > 100:  # 一定サイズ以上の輪郭のみ
+                        (x, y, w, h) = cv2.boundingRect(c)
+                        cv2.rectangle(result, (x, y), (x + w, y + h), (0, 0, 255), 2)
                 
                 # OpenCV BGR -> PIL RGB
                 result_pil = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
@@ -287,46 +262,38 @@ class DifferenceDetector:
                 # 差分がない場合は現在の画像をそのまま返す
                 result_pil = Image.fromarray(cv2.cvtColor(current_cv, cv2.COLOR_BGR2RGB))
             
-            # SSIMスコアは1.0が完全一致なので、1.0-scoreを返して直感的に理解できるようにする
-            return has_diff, 100 * (1.0 - ssim_score), result_pil
+            return has_diff, diff_ratio, result_pil
             
-        except ImportError:
-            self.logger.warning("scikit-imageがインストールされていないため、絶対差分法に切り替えます。")
-            self.method = "absdiff"
-            return self._detect_with_absdiff(prev_gray, current_gray, current_cv)
         except Exception as e:
-            self.logger.error(f"SSIM比較中にエラー: {e}", exc_info=True)
+            self.logger.error(f"SSIM差分検出中にエラー: {e}", exc_info=True)
+            # エラー時は絶対差分法を使用
             return self._detect_with_absdiff(prev_gray, current_gray, current_cv)
     
     def _pil_to_cv(self, pil_image: Image.Image) -> np.ndarray:
-        """PIL ImageをOpenCV形式に変換します。
+        """PIL画像をOpenCV形式に変換します。
         
         Args:
-            pil_image: 変換するPIL Image
+            pil_image: PIL画像
             
         Returns:
-            OpenCV形式（numpy.ndarray）の画像
+            OpenCV形式の画像（BGR）
         """
-        # PIL ImageがRGBモードでない場合は変換
+        # PIL画像をRGBに変換
         if pil_image.mode != 'RGB':
             pil_image = pil_image.convert('RGB')
         
-        # PIL -> Numpy array
-        cv_image = np.array(pil_image)
+        # PIL -> NumPy配列（RGB）
+        np_image = np.array(pil_image)
         
-        # RGB -> BGR変換（OpenCVはBGRなので）
-        cv_image = cv2.cvtColor(cv_image, cv2.COLOR_RGB2BGR)
+        # RGB -> BGR（OpenCVの形式）
+        cv_image = cv2.cvtColor(np_image, cv2.COLOR_RGB2BGR)
         
         return cv_image
     
     def shutdown(self) -> None:
-        """リソースをクリーンアップし、終了処理を行います。"""
+        """終了処理を行います。"""
         self.is_shutting_down.set()
-        self.logger.info("差分検知サービスをシャットダウンしています...")
-        
-        # 必要なクリーンアップ処理をここに記述
+        self.logger.info("差分検知モジュールを終了しています")
         
         # 履歴をクリア
-        self.history.clear()
-        
-        self.logger.info("差分検知サービスのシャットダウンが完了しました。") 
+        self.history.clear() 
