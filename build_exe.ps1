@@ -10,6 +10,6 @@ pip install -r requirements.txt
 pip install pyinstaller
 
 # exeビルド
-pyinstaller --noconfirm --onefile --windowed --name WindowCaptureReading --add-data "src;src" src/gui_main.py --distpath dist
+pyinstaller --noconfirm --onefile --windowed --name WindowCaptureReading --add-data "src;src" --add-data "resources;resources" src/gui_main.py --distpath dist
 
 Write-Host "ビルド完了: dist/WindowCaptureReading.exe" 
