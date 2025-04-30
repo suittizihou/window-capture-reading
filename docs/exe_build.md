@@ -2,11 +2,11 @@
 
 ## 概要
 
-このドキュメントでは、Window Capture Readingをスタンドアロンの実行ファイル（EXE）としてビルドする手順を説明します。ビルドされたEXEファイルはTesseract OCRを含むため、ユーザーは追加でOCRエンジンをインストールする必要がありません。
+このドキュメントでは、Window Capture Readingをスタンドアロンの実行ファイル（EXE）としてビルドする手順を説明します。ビルドされたEXEファイルは必要なライブラリをすべて含むため、ユーザーは追加でPythonやライブラリをインストールする必要がありません。
 
 ## 前提条件
 
-- Python 3.9以上
+- Python 3.11以上
 - 必要なパッケージ（requirements.txtに記載されているもの）
 - PyInstaller 5.1以上
 
@@ -22,12 +22,11 @@ pip install pyinstaller
 ### 2. PyInstallerを使用したビルド
 
 ```powershell
-pyinstaller --add-data "resources;resources" --add-data "C:\Program Files\Tesseract-OCR;tesseract" --windowed --name window-capture-reading --icon "resources/icon.ico" src/gui_main.py
+pyinstaller --add-data "resources;resources" --windowed --name window-capture-reading --icon "resources/icon.ico" src/gui_main.py
 ```
 
 上記コマンドの説明:
 - `--add-data "resources;resources"`: リソースディレクトリをバンドル
-- `--add-data "C:\Program Files\Tesseract-OCR;tesseract"`: Tesseract OCRをバンドル（インストールパスが異なる場合は調整が必要）
 - `--windowed`: コンソールウィンドウを表示しない
 - `--name window-capture-reading`: 出力ファイル名
 - `--icon "resources/icon.ico"`: アプリケーションアイコン設定
@@ -46,8 +45,8 @@ pyinstaller --add-data "resources;resources" --add-data "C:\Program Files\Tesser
 2. 新しいバージョンタグを作成してプッシュ
 
 ```powershell
-git tag v1.0.3
-git push origin v1.0.3
+git tag v2.0.0
+git push origin v2.0.0
 ```
 
 これにより、GitHub Actionsワークフローが起動し、以下のステップが実行されます:
@@ -84,7 +83,7 @@ git push origin v1.0.3
 - インストール不要で実行可能
 - Python環境が不要
 - 設定はEXEファイルと同じディレクトリの `config` フォルダに保存
-- Tesseract OCRのパスは設定ダイアログから変更可能
+- 通知音ファイルは `resources/sounds` フォルダに含まれています
 
 ## トラブルシューティング
 
@@ -95,4 +94,4 @@ git push origin v1.0.3
 2. **Visual C++ ランタイムの不足**: 実行に必要なVCランタイムがインストールされていない可能性があります。以下からダウンロードしてインストールしてみてください：
    - [Microsoft Visual C++ Redistributable](https://support.microsoft.com/ja-jp/help/2977003/the-latest-supported-visual-c-downloads)
 
-3. **Tesseract OCRの設定**: 実行ファイル版でも、Tesseract OCRは別途インストールが必要です。設定ダイアログからTesseractのパスを正しく設定してください。 
+3. **設定ファイルの破損**: 設定ファイルが破損している場合は、`config`フォルダを削除して再起動してみてください。デフォルト設定で新しい設定ファイルが作成されます。 

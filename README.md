@@ -1,15 +1,13 @@
 # Window Capture Reading
 
-ウィンドウキャプチャとOCRを用いて、指定ウィンドウのテキストを自動抽出・棒読みちゃんで読み上げるWindows向けツールです。
+ウィンドウキャプチャを用いて、指定ウィンドウの画面変化を検出し、通知音を出力するWindows向けツールです。
 
 ---
 
 ## 特徴
-- 任意のウィンドウからリアルタイムでテキストを抽出
-- OCR（Tesseract）による高精度な文字認識
-- 新規メッセージ検出・重複読み上げ防止
-- 棒読みちゃん（TCPサーバーモード）連携による音声出力
-- 柔軟な設定（.envファイル）
+- 任意のウィンドウからリアルタイムで画面変化を検出
+- 変化率に基づいた通知機能
+- 柔軟な設定（config.iniファイル）
 - ログ出力・メモリ監視機能
 
 ---
@@ -17,8 +15,6 @@
 ## 推奨環境
 - Windows 10/11
 - Python 3.11以上
-- 棒読みちゃん（TCPサーバーモード有効）
-- Tesseract OCR（日本語対応）
 
 ---
 
@@ -33,14 +29,11 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-Tesseract・棒読みちゃんのセットアップは [docs/tesseract_setup.md](docs/tesseract_setup.md)・[docs/bouyomi_setup.md](docs/bouyomi_setup.md) を参照してください。
-
 ---
 
 ## 初期設定
-1. `.env.example` を `.env` にコピーし、必要なパラメータ（ウィンドウタイトル、Tesseractパス、棒読みちゃんホスト/ポート等）を編集
-2. 棒読みちゃんをTCPサーバーモードで起動
-3. Tesseractのパス・言語設定を確認
+1. プロジェクトルートディレクトリに`config.ini`ファイルを作成または編集
+   （ファイルが存在しない場合、アプリケーション実行時に自動生成されます）
 
 詳細は [docs/environment_setup.md](docs/environment_setup.md) を参照
 
@@ -49,35 +42,32 @@ Tesseract・棒読みちゃんのセットアップは [docs/tesseract_setup.md]
 ## 起動方法
 
 ```powershell
-python -m src.main
+python -m src.gui_main
 ```
 
-- ウィンドウタイトルは`.env`で指定（例：LDPlayer, Chrome など）
-- 起動後、指定ウィンドウのテキストが自動で抽出・音声出力されます
+- ウィンドウタイトルは`config.ini`で指定（例：LDPlayer, Chrome など）
+- 起動後、指定ウィンドウの画面変化が検出されると通知音が出力されます
 
 ---
 
 ## 主な使い方
-- OCR対象ウィンドウをアクティブにしておく
-- 新しいテキストが検出されると自動で読み上げ
+- 検出対象ウィンドウをアクティブにしておく
+- 画面の変化率が設定した閾値を超えると通知音が鳴る
 - ログは`app.log`に出力
-- メモリ監視や詳細設定は`.env`で制御
+- メモリ監視や詳細設定は`config.ini`で制御
 
 ---
 
 ## トラブルシューティング
-- 棒読みちゃんが反応しない：TCPサーバーモード・ポート設定・ファイアウォールを確認
-- 文字化け：Tesseractの言語設定・エンコーディングを確認
-- OCR精度が低い：ウィンドウの解像度や前処理設定を調整
+- 通知音が鳴らない：音量設定やウィンドウ指定を確認
+- 検出がうまくいかない：変化率閾値の調整
 - その他詳細は [docs/setup_guide.md](docs/setup_guide.md) を参照
 
 ---
 
 ## 詳細ガイド
 - [docs/setup_guide.md](docs/setup_guide.md) ... セットアップガイド
-- [docs/tesseract_setup.md](docs/tesseract_setup.md) ... Tesseract OCRセットアップ
-- [docs/bouyomi_setup.md](docs/bouyomi_setup.md) ... 棒読みちゃん詳細設定
-- [docs/environment_setup.md](docs/environment_setup.md) ... .env/環境設定例
+- [docs/environment_setup.md](docs/environment_setup.md) ... config.ini設定例
 - [docs/gui_usage.md](docs/gui_usage.md) ... GUI使用方法
 - [docs/exe_build.md](docs/exe_build.md) ... 実行ファイル（EXE）ビルド方法
 - [docs/update_history.md](docs/update_history.md) ... 更新履歴
@@ -87,7 +77,7 @@ python -m src.main
 ## プロジェクト構成
 ```
 src/        ... アプリ本体
-  services/ ... 各種サービス（OCR, TTS, キャプチャ等）
+  services/ ... 各種サービス（画面変化検出、通知音等）
   utils/    ... ユーティリティ
 config/     ... 設定ファイル
 resources/  ... 静的リソース
