@@ -44,13 +44,13 @@ jobs:
         name: licenses-report
         path: LICENSES.md
         
-    - name: Commit updated LICENSES.md
-      # mainブランチへのプッシュまたは手動実行時のみ実行
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    - name: Check for license changes
       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
         git add LICENSES.md
-        # 変更がある場合のみコミット
-        git diff --staged --quiet || git commit -m "Update third-party licenses information"
-        git push 
+        if git diff --staged --quiet; then
+          echo "ライセンス情報に変更はありません。"
+        else
+          echo "::warning::ライセンス情報に変更があります。最新のライセンス情報はartifactからダウンロード可能です。"
+          echo "変更のあるライセンス:"
+          git diff --staged LICENSES.md | grep -E "^\+.*\|.*\|" | grep -v "^\+\|" || echo "詳細な変更はartifactで確認してください"
+        fi 

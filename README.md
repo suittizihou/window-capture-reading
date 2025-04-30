@@ -94,16 +94,19 @@ scripts/    ... ユーティリティスクリプト
 このプロジェクトは多数のオープンソースライブラリを使用しています。
 使用しているライブラリのライセンス情報は[LICENSES.md](LICENSES.md)ファイルにまとめられています。
 
-ライセンス情報の更新は以下のコマンドで行えます：
+ライセンス情報の管理：
 ```powershell
+# ライセンス情報を更新
 pip install pip-licenses
 python scripts/check_licenses.py
-```
 
-リリース前のライセンスチェックなど:
-```powershell
+# リリース前のライセンスチェック
 python scripts/pre_release_check.py
 ```
+
+GitHub Actionsによる自動チェック：
+- `requirements.txt`や`pyproject.toml`が更新されると自動的にライセンス情報がチェックされます
+- 変更があった場合は、ワークフロー実行結果からartifactとして最新のLICENSES.mdをダウンロードできます
 
 ---
 
