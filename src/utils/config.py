@@ -9,7 +9,22 @@ import sys
 import logging
 import configparser
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, cast
+
+# グローバル設定オブジェクト
+_CONFIG: Optional['Config'] = None
+
+def get_config() -> 'Config':
+    """
+    グローバル設定オブジェクトを取得します。存在しない場合は新規作成します。
+    
+    Returns:
+        Config: 設定オブジェクト
+    """
+    global _CONFIG
+    if _CONFIG is None:
+        _CONFIG = Config()
+    return _CONFIG
 
 class Config:
     """
@@ -63,42 +78,20 @@ class Config:
         self.config_parser.set('Window', 'TARGET_WINDOW_TITLE', 'LDPlayer')
         self.config_parser.set('Window', 'CAPTURE_INTERVAL', '1.0')
         
-        # OCRセクション
-        self.config_parser.add_section('OCR')
-        self.config_parser.set('OCR', 'TESSERACT_PATH', r'C:\\Program Files\\Tesseract-OCR\\tesseract.exe')
-        self.config_parser.set('OCR', 'TESSERACT_LANG', 'jpn')
-        self.config_parser.set('OCR', 'TESSERACT_CONFIG', '--psm 6')
-        self.config_parser.set('OCR', 'OCR_USE_GRAYSCALE', 'true')
-        self.config_parser.set('OCR', 'OCR_USE_BLUR', 'true')
-        self.config_parser.set('OCR', 'OCR_USE_THRESHOLD', 'true')
-        self.config_parser.set('OCR', 'OCR_BLUR_KERNEL', '5')
-        self.config_parser.set('OCR', 'OCR_THRESHOLD_METHOD', 'adaptive')
-        self.config_parser.set('OCR', 'OCR_CONTRAST_ALPHA', '1.0')
-        self.config_parser.set('OCR', 'OCR_CONTRAST_BETA', '0')
-        self.config_parser.set('OCR', 'OCR_USE_CACHE', 'true')
-        self.config_parser.set('OCR', 'OCR_CACHE_TTL', '5.0')
-        
         # Differenceセクション
         self.config_parser.add_section('Difference')
         self.config_parser.set('Difference', 'DIFF_THRESHOLD', '0.05')
-        self.config_parser.set('Difference', 'DIFF_BLUR_SIZE', '5')
-        self.config_parser.set('Difference', 'DIFF_COOLDOWN', '1.0')
-        self.config_parser.set('Difference', 'DIFF_MIN_AREA', '100')
         self.config_parser.set('Difference', 'DIFF_METHOD', 'ssim')
         self.config_parser.set('Difference', 'DIFF_MAX_HISTORY', '10')
         self.config_parser.set('Difference', 'DIFF_DEBUG_MODE', 'false')
         
         # Notificationセクション
         self.config_parser.add_section('Notification')
-        self.config_parser.set('Notification', 'NOTIFICATION_TITLE', '画面の変化を検知しました')
         self.config_parser.set('Notification', 'NOTIFICATION_SOUND', 'true')
-        self.config_parser.set('Notification', 'NOTIFICATION_BEEP_FREQUENCY', '1000')
-        self.config_parser.set('Notification', 'NOTIFICATION_BEEP_DURATION', '200')
+        self.config_parser.set('Notification', 'NOTIFICATION_COOLDOWN', '2.0')
         
-        # 後方互換性のために追加
+        # 後方互換性のために追加（空のセクション）
         self.config_parser.add_section('Compatibility')
-        self.config_parser.set('Compatibility', 'BOUYOMI_PORT', '50001')
-        self.config_parser.set('Compatibility', 'BOUYOMI_VOICE_TYPE', '0')
     
     def _create_default_config(self) -> None:
         """デフォルト設定ファイルを作成します。"""
@@ -128,7 +121,7 @@ class Config:
         
         if section and key in self.config_parser[section]:
             return self.config_parser[section][key]
-        return default
+        return default if default is not None else ""
     
     def set(self, key: str, value: str) -> None:
         """
@@ -165,11 +158,8 @@ class Config:
         key_prefixes = {
             'TARGET_WINDOW': 'Window',
             'CAPTURE_': 'Window',
-            'TESSERACT_': 'OCR',
-            'OCR_': 'OCR',
             'DIFF_': 'Difference',
             'NOTIFICATION_': 'Notification',
-            'BOUYOMI_': 'Compatibility'
         }
         
         for prefix, section in key_prefixes.items():
@@ -198,3 +188,33 @@ class Config:
         for section in self.config_parser.sections():
             result[section] = dict(self.config_parser[section])
         return result
+    
+    def get_window_titles(self) -> List[str]:
+        """
+        現在表示中のウィンドウタイトル一覧を取得します。
+        Returns:
+            List[str]: ウィンドウタイトルのリスト
+        """
+        titles = []
+        try:
+            import ctypes
+            EnumWindows = ctypes.windll.user32.EnumWindows
+            EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
+            GetWindowText = ctypes.windll.user32.GetWindowTextW
+            GetWindowTextLength = ctypes.windll.user32.GetWindowTextLengthW
+            IsWindowVisible = ctypes.windll.user32.IsWindowVisible
+            def foreach(hwnd, lParam):
+                if IsWindowVisible(hwnd):
+                    length = GetWindowTextLength(hwnd)
+                    if length > 0:
+                        buff = ctypes.create_unicode_buffer(length + 1)
+                        GetWindowText(hwnd, buff, length + 1)
+                        title = buff.value.strip()
+                        if title:
+                            titles.append(title)
+                return True
+            EnumWindows(EnumWindowsProc(foreach), 0)
+            return sorted(set(titles))
+        except Exception as e:
+            self.logger.error(f"ウィンドウタイトル一覧の取得に失敗しました: {e}")
+            return []
