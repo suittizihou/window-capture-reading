@@ -23,6 +23,7 @@ import sys
 import datetime
 from src.utils.config import Config, get_config
 from src.services.difference_detector import DifferenceDetector
+from src.utils.resource_path import get_sound_file_path
 
 # グローバル変数の初期化
 roi = None  # ROI矩形座標 [x1, y1, x2, y2]
@@ -32,26 +33,6 @@ detector = None  # 差分検知器
 
 # 省略表示用関数を追加
 MAX_TITLE_DISPLAY_LENGTH = 24  # 表示上限（全角換算で調整可）
-
-# 通知音ファイルのパスを取得する関数
-def get_sound_file_path() -> str:
-    """
-    通知音ファイルのパスを返す。exe化された場合とそうでない場合に対応。
-    
-    Returns:
-        str: 通知音ファイルのパス
-    """
-    # exe化されている場合
-    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-        base_dir = sys._MEIPASS
-    else:
-        # 通常実行の場合
-        base_dir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
-    
-    # 通知音ファイルのパス
-    sound_path = os.path.join(base_dir, 'resources', 'notification_sound.wav')
-    
-    return sound_path
 
 # 音声を再生する関数
 def play_notification_sound() -> bool:
