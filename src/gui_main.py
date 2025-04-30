@@ -21,15 +21,39 @@ import textwrap
 from tkinter import filedialog
 import sys
 import datetime
-from src.services.ocr_service import OCRService
+# OCR関連のインポートを無効化
+# from src.services.ocr_service import OCRService
 from src.utils.config import Config
+from src.services.difference_detector import DifferenceDetector
 
 # グローバル変数の初期化
 roi = None  # ROI矩形座標 [x1, y1, x2, y2]
-ocr_preview_img = None  # OCRプレビュー用画像を保持
+prev_image = None  # 前回のキャプチャ画像
+diff_preview_img = None  # 差分プレビュー用画像を保持
 
 # 省略表示用関数を追加
 MAX_TITLE_DISPLAY_LENGTH = 24  # 表示上限（全角換算で調整可）
+
+# 通知音ファイルのパスを取得する関数
+def get_sound_file_path() -> str:
+    """
+    通知音ファイルのパスを返す。exe化された場合とそうでない場合に対応。
+    
+    Returns:
+        str: 通知音ファイルのパス
+    """
+    # exe化されている場合
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        base_dir = sys._MEIPASS
+    else:
+        # 通常実行の場合
+        base_dir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+    
+    # 通知音ファイルのパス
+    sound_path = os.path.join(base_dir, 'resources', 'notification_sound.wav')
+    
+    return sound_path
+
 def ellipsize(text: str, max_length: int = MAX_TITLE_DISPLAY_LENGTH) -> str:
     """
     長すぎるテキストを...で省略して返す。
@@ -135,7 +159,6 @@ def main(window_title: Optional[str] = None) -> None:
     # スレッド制御用
     running = threading.Event()
     running.clear()
-    ocr_text_queue = queue.Queue()
     ocr_thread = None
     capture_thread = None  # キャプチャスレッド用
     capture_running = threading.Event()  # キャプチャ制御用
@@ -161,75 +184,75 @@ def main(window_title: Optional[str] = None) -> None:
     content_row = tk.Frame(left_frame)
     content_row.pack(pady=(0, 10), padx=0, fill='both', expand=True)
 
-    # OCRプレビュー（左）: タイトル付きで大きく
-    ocr_preview_frame = tk.LabelFrame(content_row, text='OCRプレビュー', labelanchor='n', font=ocr_font, bg='#f8f8ff')
-    ocr_preview_frame.pack(side='left', fill='both', expand=True, padx=(0, 16), pady=0)
+    # OCRプレビューを差分検知プレビューに変更
+    diff_preview_frame = tk.LabelFrame(content_row, text='差分検知プレビュー', labelanchor='n', font=ocr_font, bg='#f8f8ff')
+    diff_preview_frame.pack(side='left', fill='both', expand=True, padx=(0, 16), pady=0)
 
-    # --- OCRプレビューCanvas ---
-    OCR_CANVAS_W, OCR_CANVAS_H = 320, 240
-    ocr_canvas = tk.Canvas(ocr_preview_frame, width=OCR_CANVAS_W, height=OCR_CANVAS_H, bg='#fff', relief=tk.SUNKEN, bd=1, highlightthickness=0)
-    ocr_canvas.pack(fill='both', expand=True, padx=12, pady=(12, 0))
-    ocr_canvas_img = None
-    ocr_canvas_img_obj = None
-    ocr_canvas_zoom = 1.0
-    ocr_canvas_pan = [0, 0]
-    ocr_canvas_dragging = False
-    ocr_canvas_drag_start = [0, 0]
+    # --- 差分プレビューCanvas ---
+    DIFF_CANVAS_W, DIFF_CANVAS_H = 320, 240
+    diff_canvas = tk.Canvas(diff_preview_frame, width=DIFF_CANVAS_W, height=DIFF_CANVAS_H, bg='#fff', relief=tk.SUNKEN, bd=1, highlightthickness=0)
+    diff_canvas.pack(fill='both', expand=True, padx=12, pady=(12, 0))
+    diff_canvas_img = None
+    diff_canvas_img_obj = None
+    diff_canvas_zoom = 1.0
+    diff_canvas_pan = [0, 0]
+    diff_canvas_dragging = False
+    diff_canvas_drag_start = [0, 0]
 
-    def draw_ocr_canvas_img(img: Image.Image):
-        nonlocal ocr_canvas_img, ocr_canvas_img_obj
+    def draw_diff_canvas_img(img: Image.Image):
+        nonlocal diff_canvas_img, diff_canvas_img_obj
         # ズーム・パンを反映して表示
-        canvas_w = ocr_canvas.winfo_width() or OCR_CANVAS_W
-        canvas_h = ocr_canvas.winfo_height() or OCR_CANVAS_H
-        zoom = ocr_canvas_zoom
+        canvas_w = diff_canvas.winfo_width() or DIFF_CANVAS_W
+        canvas_h = diff_canvas.winfo_height() or DIFF_CANVAS_H
+        zoom = diff_canvas_zoom
         disp_w, disp_h = int(img.width * zoom), int(img.height * zoom)
         img_disp = img.resize((disp_w, disp_h), Image.LANCZOS)
         # パン（中央基準）
-        x_offset = (canvas_w - disp_w) // 2 + ocr_canvas_pan[0]
-        y_offset = (canvas_h - disp_h) // 2 + ocr_canvas_pan[1]
-        ocr_canvas.delete('all')
-        ocr_canvas_img = ImageTk.PhotoImage(img_disp)
-        ocr_canvas_img_obj = ocr_canvas.create_image(x_offset, y_offset, anchor='nw', image=ocr_canvas_img)
+        x_offset = (canvas_w - disp_w) // 2 + diff_canvas_pan[0]
+        y_offset = (canvas_h - disp_h) // 2 + diff_canvas_pan[1]
+        diff_canvas.delete('all')
+        diff_canvas_img = ImageTk.PhotoImage(img_disp)
+        diff_canvas_img_obj = diff_canvas.create_image(x_offset, y_offset, anchor='nw', image=diff_canvas_img)
 
     # --- ズーム操作（マウスホイール） ---
-    def on_ocr_canvas_zoom(event):
-        nonlocal ocr_canvas_zoom
+    def on_diff_canvas_zoom(event):
+        nonlocal diff_canvas_zoom
         if event.delta > 0:
-            ocr_canvas_zoom = min(ocr_canvas_zoom + 0.1, 3.0)
+            diff_canvas_zoom = min(diff_canvas_zoom + 0.1, 3.0)
         else:
-            ocr_canvas_zoom = max(ocr_canvas_zoom - 0.1, 0.5)
-        if ocr_preview_img is not None:
-            draw_ocr_canvas_img(ocr_preview_img)
-    ocr_canvas.bind('<MouseWheel>', on_ocr_canvas_zoom)
+            diff_canvas_zoom = max(diff_canvas_zoom - 0.1, 0.5)
+        if diff_preview_img is not None:
+            draw_diff_canvas_img(diff_preview_img)
+    diff_canvas.bind('<MouseWheel>', on_diff_canvas_zoom)
     # Linux/Mac用
-    ocr_canvas.bind('<Button-4>', lambda e: (setattr(ocr_canvas_zoom, '__iadd__', 0.1), draw_ocr_canvas_img(ocr_preview_img) if ocr_preview_img is not None else None))
-    ocr_canvas.bind('<Button-5>', lambda e: (setattr(ocr_canvas_zoom, '__isub__', 0.1), draw_ocr_canvas_img(ocr_preview_img) if ocr_preview_img is not None else None))
+    diff_canvas.bind('<Button-4>', lambda e: (setattr(diff_canvas_zoom, '__iadd__', 0.1), draw_diff_canvas_img(diff_preview_img) if diff_preview_img is not None else None))
+    diff_canvas.bind('<Button-5>', lambda e: (setattr(diff_canvas_zoom, '__isub__', 0.1), draw_diff_canvas_img(diff_preview_img) if diff_preview_img is not None else None))
 
     # --- パン操作（右クリックドラッグ） ---
-    def on_ocr_canvas_pan_start(event):
-        nonlocal ocr_canvas_dragging, ocr_canvas_drag_start
-        ocr_canvas_dragging = True
-        ocr_canvas_drag_start = [event.x, event.y]
-    def on_ocr_canvas_pan_drag(event):
-        nonlocal ocr_canvas_dragging, ocr_canvas_drag_start, ocr_canvas_pan
-        if ocr_canvas_dragging:
-            dx = event.x - ocr_canvas_drag_start[0]
-            dy = event.y - ocr_canvas_drag_start[1]
-            ocr_canvas_pan[0] += dx
-            ocr_canvas_pan[1] += dy
-            ocr_canvas_drag_start = [event.x, event.y]
-            if ocr_preview_img is not None:
-                draw_ocr_canvas_img(ocr_preview_img)
-    def on_ocr_canvas_pan_end(event):
-        nonlocal ocr_canvas_dragging
-        ocr_canvas_dragging = False
+    def on_diff_canvas_pan_start(event):
+        nonlocal diff_canvas_dragging, diff_canvas_drag_start
+        diff_canvas_dragging = True
+        diff_canvas_drag_start = [event.x, event.y]
+    def on_diff_canvas_pan_drag(event):
+        nonlocal diff_canvas_dragging, diff_canvas_drag_start, diff_canvas_pan
+        if diff_canvas_dragging:
+            dx = event.x - diff_canvas_drag_start[0]
+            dy = event.y - diff_canvas_drag_start[1]
+            diff_canvas_pan[0] += dx
+            diff_canvas_pan[1] += dy
+            diff_canvas_drag_start = [event.x, event.y]
+            if diff_preview_img is not None:
+                draw_diff_canvas_img(diff_preview_img)
+    def on_diff_canvas_pan_end(event):
+        nonlocal diff_canvas_dragging
+        diff_canvas_dragging = False
     # 左クリックバインドを削除し、右クリックに変更
-    ocr_canvas.unbind('<ButtonPress-1>')
-    ocr_canvas.unbind('<B1-Motion>')
-    ocr_canvas.unbind('<ButtonRelease-1>')
-    ocr_canvas.bind('<ButtonPress-3>', on_ocr_canvas_pan_start)
-    ocr_canvas.bind('<B3-Motion>', on_ocr_canvas_pan_drag)
-    ocr_canvas.bind('<ButtonRelease-3>', on_ocr_canvas_pan_end)
+    diff_canvas.unbind('<ButtonPress-1>')
+    diff_canvas.unbind('<B1-Motion>')
+    diff_canvas.unbind('<ButtonRelease-1>')
+    diff_canvas.bind('<ButtonPress-3>', on_diff_canvas_pan_start)
+    diff_canvas.bind('<B3-Motion>', on_diff_canvas_pan_drag)
+    diff_canvas.bind('<ButtonRelease-3>', on_diff_canvas_pan_end)
 
     # --- ボタン（右）: 右端に縦並びで固定 ---
     button_frame = tk.Frame(content_row)
@@ -240,7 +263,7 @@ def main(window_title: Optional[str] = None) -> None:
         nonlocal ocr_thread
         if not ocr_thread:
             running.set()
-            ocr_thread = threading.Thread(target=ocr_loop, daemon=True)
+            ocr_thread = threading.Thread(target=diff_detection_loop, daemon=True)
             ocr_thread.start()
             set_status('Running')
             start_button.config(state=tk.DISABLED)
@@ -252,14 +275,25 @@ def main(window_title: Optional[str] = None) -> None:
         start_button.config(state=tk.NORMAL)
         stop_button.config(state=tk.DISABLED)
 
-    def on_capture_ocr() -> None:
-        from src.services.ocr_service import OCRService
+    def on_capture_diff() -> None:
+        """画面の差分を検知して表示する"""
+        global roi, prev_image, diff_preview_img
         from src.utils.config import Config
         config = Config()
         window_name = window_title or config.get("TARGET_WINDOW_TITLE", "LDPlayer")
         window_capture = WindowCapture(window_name)
-        ocr_service = OCRService(config)
+        
+        # グローバル変数としてdetectorを宣言
+        global detector
+        # 差分検知器の更新 - 設定が変更された場合に再生成
+        detector_threshold = float(config.get("DIFF_THRESHOLD", "1.0"))
+        if detector is None or detector.diff_ratio_threshold != detector_threshold:
+            detector = DifferenceDetector()
+            detector.diff_ratio_threshold = detector_threshold
+            logger.info(f"差分検知感度を{detector_threshold}%に設定しました")
+        
         frame = window_capture.capture()
+        
         if frame is not None:
             frame = frame.transpose(Image.FLIP_TOP_BOTTOM)
             crop_img = frame
@@ -272,8 +306,33 @@ def main(window_title: Optional[str] = None) -> None:
                 y2 = max(0, min(y2, frame.height))
                 if x2 > x1 and y2 > y1:
                     crop_img = frame.crop((x1, y1, x2, y2))
-            text = ocr_service.extract_text(crop_img)
-            ocr_text_var.set(text or 'まだテキストは検出されていません')
+            
+            if prev_image is None:
+                prev_image = crop_img
+                ocr_text_var.set('初回キャプチャ - 差分はまだありません')
+                # 初回キャプチャ画像をプレビューに表示
+                diff_preview_img = crop_img
+                draw_diff_canvas_img(diff_preview_img)
+                return
+            
+            # 差分検知
+            try:
+                has_diff, diff_ratio, diff_image = detector.detect_difference(prev_image, crop_img)
+                
+                if has_diff:
+                    ocr_text_var.set(f'差分を検出しました (変化率: {diff_ratio:.2f}%)')
+                    # 差分画像をプレビューに表示
+                    diff_preview_img = diff_image
+                    draw_diff_canvas_img(diff_preview_img)
+                else:
+                    ocr_text_var.set('差分は検出されませんでした')
+                
+                # 現在の画像を保存
+                prev_image = crop_img
+                
+            except Exception as e:
+                logger.error(f"差分検知処理でエラー: {e}", exc_info=True)
+                ocr_text_var.set(f'エラー: {str(e)}')
         else:
             messagebox.showerror('エラー', 'ウィンドウキャプチャに失敗しました')
 
@@ -291,8 +350,6 @@ def main(window_title: Optional[str] = None) -> None:
     start_button.pack(pady=(0, 12), anchor='n')
     stop_button = tk.Button(button_frame, text='Stop', width=12, height=2, command=on_stop, state=tk.DISABLED)
     stop_button.pack(pady=(0, 12), anchor='n')
-    capture_ocr_button = tk.Button(button_frame, text='読み取り', width=12, height=2, command=on_capture_ocr)
-    capture_ocr_button.pack(pady=(0, 12), anchor='n')
 
     # プレビューCanvas（右側）
     preview_canvas = tk.Canvas(right_frame, bg='#222')
@@ -546,8 +603,8 @@ def main(window_title: Optional[str] = None) -> None:
     left_frame.pack(side='left', fill='both', expand=True)
     right_frame.pack(side='right', fill='y', expand=False)
     # OCRプレビューのフレームも拡張
-    ocr_preview_frame.pack(side='left', fill='both', expand=True, padx=(0, 16), pady=0)
-    ocr_canvas.pack(fill='both', expand=True, padx=12, pady=(12, 0))
+    diff_preview_frame.pack(side='left', fill='both', expand=True, padx=(0, 16), pady=0)
+    diff_canvas.pack(fill='both', expand=True, padx=12, pady=(12, 0))
     # ボタンフレームも余白を調整
     button_frame.pack(side='right', fill='y', padx=(0, 8), pady=0)
     # preview_canvasも拡張
@@ -566,10 +623,11 @@ def main(window_title: Optional[str] = None) -> None:
 
     def capture_loop():
         """画面キャプチャとプレビュー表示を行うループ"""
-        global roi
+        global roi, prev_image, diff_preview_img
         nonlocal capture_thread
         from src.utils.config import Config
         window_capture = None
+        detector = None  # 差分検知器（必要時に初期化）
         logger.info("キャプチャループを開始")
         try:
             while capture_running.is_set():
@@ -583,6 +641,14 @@ def main(window_title: Optional[str] = None) -> None:
                 if window_capture is None or window_capture.window_title != window_name:
                     from src.services.window_capture import WindowCapture
                     window_capture = WindowCapture(window_name)
+                
+                # 差分検知器の更新 - 設定が変更された場合に再生成
+                detector_threshold = float(config.get("DIFF_THRESHOLD", "1.0"))
+                if detector is None or detector.diff_ratio_threshold != detector_threshold:
+                    detector = DifferenceDetector()
+                    detector.diff_ratio_threshold = detector_threshold
+                    logger.info(f"差分検知感度を{detector_threshold}%に設定しました")
+                
                 frame = window_capture.capture()
                 if frame is None:
                     logger.warning("キャプチャ画像が取得できませんでした（Noneが返却されました）")
@@ -603,9 +669,10 @@ def main(window_title: Optional[str] = None) -> None:
                     time.sleep(0.2)
                     continue
                 root.after(0, lambda: draw_preview_with_roi(frame_pil))
-                # --- OCR前処理プレビューも常時表示（ROIでクロップ） ---
+                
+                # 差分検知処理
                 try:
-                    # 画像を上下反転（OCRループと同じ処理）
+                    # 画像を上下反転
                     frame_flipped = frame_pil.transpose(Image.FLIP_TOP_BOTTOM)
                     # ROIでクロップ
                     crop_img = frame_flipped
@@ -618,21 +685,35 @@ def main(window_title: Optional[str] = None) -> None:
                         y2 = max(0, min(y2, frame_flipped.height))
                         if x2 > x1 and y2 > y1:
                             crop_img = frame_flipped.crop((x1, y1, x2, y2))
-                    # クロップした画像を処理（グレースケール・二値化）
-                    frame_cv = np.array(crop_img)
-                    if frame_cv.ndim == 3:
-                        gray = cv2.cvtColor(frame_cv, cv2.COLOR_RGB2GRAY)
-                    else:
-                        gray = frame_cv
-                    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-                    thresh_rgb = cv2.cvtColor(thresh, cv2.COLOR_GRAY2RGB)
-                    thresh_pil = Image.fromarray(thresh_rgb)
-                    thresh_pil.thumbnail((200, 200), Image.LANCZOS)
-                    global ocr_preview_img
-                    ocr_preview_img = thresh_pil
-                    root.after(0, lambda img=ocr_preview_img: draw_ocr_canvas_img(img))
+                    
+                    # 初回キャプチャ時または前回画像がない場合
+                    if prev_image is None:
+                        prev_image = crop_img
+                        diff_preview_img = crop_img
+                        root.after(0, lambda img=diff_preview_img: draw_diff_canvas_img(img))
+                        continue
+                    
+                    # 差分検知
+                    has_diff, diff_ratio, diff_image = detector.detect_difference(prev_image, crop_img)
+                    diff_preview_img = diff_image
+                    root.after(0, lambda img=diff_preview_img: draw_diff_canvas_img(img))
+                    
+                    if running.is_set():
+                        # 差分テキストを更新
+                        if has_diff:
+                            diff_text = f'差分を検出しました (変化率: {diff_ratio:.2f}%)'
+                        else:
+                            diff_text = '差分は検出されませんでした'
+                        
+                        # ローカル表示を更新（直接のGUI操作はメインスレッドで行う）
+                        root.after(0, lambda txt=diff_text: ocr_text_var.set(txt))
+                    
+                    # 現在の画像を保存
+                    prev_image = crop_img
+                    
                 except Exception as e:
-                    logger.error(f"OCRプレビュー画像の生成に失敗: {e}", exc_info=True)
+                    logger.error(f"差分検知処理でエラー: {e}", exc_info=True)
+                
                 time.sleep(capture_interval)
         except Exception as e:
             logger.error(f"キャプチャループでエラー発生: {e}", exc_info=True)
@@ -640,99 +721,70 @@ def main(window_title: Optional[str] = None) -> None:
             logger.info("キャプチャループを終了")
             capture_thread = None
 
-    def ocr_loop():
-        """OCRと読み上げを行うループ"""
-        global roi
+    def diff_detection_loop():
+        """差分検知と通知を行うループ - OCRループの代わりに使用"""
+        global roi, prev_image
         nonlocal ocr_thread
         from src.utils.config import Config
-        from src.services.ocr_service import OCRService
-        from src.services.bouyomi_client import BouyomiClient
-        window_capture = None
-        ocr_service = None
-        bouyomi_client = None
-        last_text = ''
-        logger.info("OCRループを開始")
+        import winsound  # 通知音用
+        
+        # 通知管理用の変数
+        last_notification_time = 0
+        notification_cooldown = 3.0  # 通知の連続発生を防ぐためのクールダウン（秒）
+        last_diff_text = ""  # 最後に通知したテキスト
+        sound_playing = False  # 通知音再生中フラグ
+        change_during_playback = False  # 再生中に変化があったフラグ
+        sound_duration = 2.0  # 通知音の推定再生時間（秒）
+        
+        # 通知音ファイルのパスを取得
+        sound_file = get_sound_file_path()
+        
+        logger.info("差分検知ループを開始")
         try:
             while running.is_set():
-                config = Config()
-                window_name = config.get("TARGET_WINDOW_TITLE", "LDPlayer")
-                if window_capture is None or window_capture.window_title != window_name:
-                    from src.services.window_capture import WindowCapture
-                    window_capture = WindowCapture(window_name)
-                if ocr_service is None or ocr_service.config.get("TARGET_WINDOW_TITLE") != window_name:
-                    ocr_service = OCRService(config)
-                bouyomi_enabled = str(config.get("BOUYOMI_ENABLED", "true")).lower() == "true"
-                if bouyomi_enabled and (bouyomi_client is None or bouyomi_client.config.get("BOUYOMI_PORT") != config.get("BOUYOMI_PORT")):
-                    bouyomi_client = BouyomiClient(config)
-                frame = window_capture.capture()
-                if frame is None:
-                    logger.warning("OCR用キャプチャ画像が取得できませんでした（Noneが返却されました）")
-                    time.sleep(0.2)
-                    continue
-                frame_pil = None
-                if isinstance(frame, np.ndarray):
-                    try:
-                        frame_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-                    except Exception as e:
-                        logger.error(f"OCR用画像の変換に失敗: {e}", exc_info=True)
-                        time.sleep(0.2)
-                        continue
-                elif isinstance(frame, Image.Image):
-                    frame_pil = frame
-                else:
-                    logger.warning(f"OCR用キャプチャ画像の型が不正です: {type(frame)}")
-                    time.sleep(0.2)
-                    continue
-                frame_pil = frame_pil.transpose(Image.FLIP_TOP_BOTTOM)
-                crop_img = frame_pil
-                roi_now = roi if roi is not None else None
-                if roi_now is not None:
-                    x1, y1, x2, y2 = [int(round(v)) for v in roi_now]
-                    x1 = max(0, min(x1, frame_pil.width-1))
-                    y1 = max(0, min(y1, frame_pil.height-1))
-                    x2 = max(0, min(x2, frame_pil.width))
-                    y2 = max(0, min(y2, frame_pil.height))
-                    if x2 > x1 and y2 > y1:
-                        crop_img = frame_pil.crop((x1, y1, x2, y2))
-                try:
-                    text = ocr_service.extract_text(crop_img)
-                    if text and text != last_text:
-                        ocr_text_queue.put(text)
-                        last_text = text
-                        if bouyomi_enabled and bouyomi_client is not None:
-                            try:
-                                bouyomi_client.talk(text)
-                                logger.info(f"棒読みちゃんで読み上げ: {text}")
-                            except Exception as e:
-                                logger.error(f"棒読みちゃん読み上げエラー: {e}", exc_info=True)
-                except Exception as e:
-                    logger.error(f"OCR処理でエラー: {e}", exc_info=True)
+                # 差分検知の結果を取得
+                current_text = ocr_text_var.get()
+                current_time = time.time()
+                
+                # 音の再生状態を更新
+                if sound_playing and current_time - last_notification_time > sound_duration:
+                    sound_playing = False
+                    # 再生中に変化があった場合、再度通知音を再生
+                    if change_during_playback:
+                        winsound.PlaySound(sound_file, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                        last_notification_time = current_time
+                        sound_playing = True
+                        change_during_playback = False
+                        logger.info("再生中の変化を検知したため、通知音を再生します")
+                
+                # 「差分を検出しました」が含まれる場合の処理
+                if "差分を検出しました" in current_text and current_text != last_diff_text:
+                    last_diff_text = current_text  # 検出テキストを更新
+                    
+                    # 通知音の再生状態に応じて処理を分岐
+                    if sound_playing:
+                        # 再生中は変化フラグを立てるだけ
+                        change_during_playback = True
+                        logger.info(f"通知音再生中に画面変化を検知: {current_text}")
+                    else:
+                        # 再生中でなければ、クールダウン確認後に通知音を再生
+                        if current_time - last_notification_time > notification_cooldown:
+                            # 音声ファイルを再生
+                            winsound.PlaySound(sound_file, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                            # 通知時刻を更新
+                            last_notification_time = current_time
+                            sound_playing = True
+                            
+                            # ログにも記録
+                            logger.info(f"画面変化を検知: {current_text}")
+                
                 time.sleep(0.5)
         except Exception as e:
-            logger.error(f"OCRループでエラー発生: {e}", exc_info=True)
+            logger.error(f"差分検知ループでエラー発生: {e}", exc_info=True)
         finally:
-            if bouyomi_client is not None:
-                try:
-                    bouyomi_client.close()
-                    logger.info("BouyomiClientをクローズしました（GUI）")
-                except Exception as e:
-                    logger.error(f"BouyomiClientのクローズに失敗: {e}", exc_info=True)
-            logger.info("OCRループを終了")
+            logger.info("差分検知ループを終了")
             ocr_thread = None
             set_status('Stopped')
-
-    def update_ocr_text():
-        """OCRテキストのライブ更新処理（Tkinterのafterで定期実行）。"""
-        try:
-            while True:
-                text = ocr_text_queue.get_nowait()
-                ocr_text_var.set(text)
-        except queue.Empty:
-            pass
-        # テキストが空の場合はプレースホルダー
-        if not ocr_text_var.get():
-            ocr_text_var.set('まだテキストは検出されていません')
-        root.after(300, update_ocr_text)
 
     def get_window_titles() -> list[str]:
         """
@@ -770,12 +822,11 @@ def main(window_title: Optional[str] = None) -> None:
         settings_keys = [
             ("TARGET_WINDOW_TITLE", "ウィンドウタイトル", config.get("TARGET_WINDOW_TITLE", "LDPlayer")),
             ("CAPTURE_INTERVAL", "キャプチャ間隔（秒）", config.get("CAPTURE_INTERVAL", "1.0")),
-            ("BOUYOMI_PORT", "棒読みちゃんポート", config.get("BOUYOMI_PORT", "50001")),
-            ("BOUYOMI_VOICE_TYPE", "棒読みちゃん声質", config.get("BOUYOMI_VOICE_TYPE", "0")),
+            ("DIFF_THRESHOLD", "差分検知感度", config.get("DIFF_THRESHOLD", "1.0")),
         ]
         dialog = tk.Toplevel(root)
         dialog.title('設定')
-        dialog.geometry('400x320')
+        dialog.geometry('400x250')
         dialog.resizable(False, False)
         entries = {}
         for i, (key, label, value) in enumerate(settings_keys):
@@ -807,7 +858,7 @@ def main(window_title: Optional[str] = None) -> None:
                 capture_thread.start()
             # OCRスレッド再起動（Startボタンが有効な場合のみ）
             if ocr_thread is None and running.is_set():
-                ocr_thread = threading.Thread(target=ocr_loop, daemon=True)
+                ocr_thread = threading.Thread(target=diff_detection_loop, daemon=True)
                 ocr_thread.start()
             dialog.destroy()
         def on_cancel():
