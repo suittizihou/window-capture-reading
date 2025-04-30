@@ -15,12 +15,14 @@ def get_resource_path(relative_path: str) -> str:
         str: リソースファイルの絶対パス
     """
     # exe化されている場合
-    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         base_dir = sys._MEIPASS
     else:
         # 通常実行の場合
-        base_dir = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    
+        base_dir = os.path.abspath(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        )
+
     return os.path.join(base_dir, relative_path)
 
 
@@ -31,4 +33,4 @@ def get_sound_file_path() -> str:
     Returns:
         str: 通知音ファイルのパス
     """
-    return get_resource_path(os.path.join('resources', 'notification_sound.wav')) 
+    return get_resource_path(os.path.join("resources", "notification_sound.wav"))

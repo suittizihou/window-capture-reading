@@ -110,6 +110,7 @@ def main():
     
     print("完了!")
     print(f"合計 {len(licenses_data)} パッケージのライセンス情報を収集しました。")
+    print(f"ライセンス情報を {output_path} に出力しました。")
     print(f"ライセンスタイプ: {', '.join(sorted(license_groups.keys()))}")
 
 

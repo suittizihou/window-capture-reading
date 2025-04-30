@@ -18,7 +18,7 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "tesseract_not_found": "Tesseractが指定されたパスに見つかりません: {path}",
         "preprocessing_error": "画像の前処理中にエラーが発生しました: {error}",
         "test_success": "OCRエンジンのテストに成功しました",
-        "test_failure": "OCRエンジンのテストに失敗しました"
+        "test_failure": "OCRエンジンのテストに失敗しました",
     },
     "en": {
         "ocr_success": "Text extracted: {length} characters",
@@ -27,26 +27,27 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "tesseract_not_found": "Tesseract not found at specified path: {path}",
         "preprocessing_error": "Error occurred during image preprocessing: {error}",
         "test_success": "OCR engine test succeeded",
-        "test_failure": "OCR engine test failed"
-    }
+        "test_failure": "OCR engine test failed",
+    },
 }
+
 
 class MessageManager:
     """メッセージ管理クラス。"""
-    
+
     def __init__(self):
         """メッセージマネージャーを初期化します。"""
         self.language = os.environ.get("MESSAGE_LANGUAGE", DEFAULT_LANGUAGE)
         if self.language not in AVAILABLE_LANGUAGES:
             self.language = DEFAULT_LANGUAGE
-    
+
     def get(self, key: str, **kwargs) -> str:
         """メッセージを取得します。
-        
+
         Args:
             key: メッセージのキー
             **kwargs: メッセージ内の変数に対応する値
-            
+
         Returns:
             str: フォーマットされたメッセージ
         """
@@ -60,15 +61,16 @@ class MessageManager:
                 return message.format(**kwargs) if kwargs else message
             except KeyError:
                 return f"Message not found: {key}"
-    
+
     def set_language(self, language: str) -> None:
         """使用する言語を設定します。
-        
+
         Args:
             language: 言語コード（"ja"または"en"）
         """
         if language in AVAILABLE_LANGUAGES:
             self.language = language
+
 
 # シングルトンインスタンス
 message_manager = MessageManager()

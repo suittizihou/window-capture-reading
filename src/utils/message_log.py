@@ -1,6 +1,7 @@
 """
 棒読みちゃん送信メッセージのログ保存ユーティリティ。
 """
+
 import os
 from pathlib import Path
 import logging
@@ -21,4 +22,6 @@ def save_message_log(message: str) -> None:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             f.write(f"{timestamp} {message}\n")
     except Exception as e:
-        logging.getLogger(__name__).error(f"メッセージログ保存エラー: {e}", exc_info=True) 
+        logging.getLogger(__name__).error(
+            f"メッセージログ保存エラー: {e}", exc_info=True
+        )

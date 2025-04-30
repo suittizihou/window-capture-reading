@@ -27,6 +27,7 @@ window_capture: WindowCapture = None
 memory_watcher: Optional[MemoryWatcher] = None
 running: bool = True
 
+
 def signal_handler(sig: int, frame: Any) -> None:
     """シグナルハンドラ関数。プログラムの終了を処理します。
 
@@ -37,7 +38,7 @@ def signal_handler(sig: int, frame: Any) -> None:
     global running
     logger = logging.getLogger()
     logger.info("終了シグナルを受信しました。アプリケーションを終了します...")
-    
+
     # 終了フラグを設定
     running = False
 
@@ -45,6 +46,7 @@ def signal_handler(sig: int, frame: Any) -> None:
     logger.info("差異検出サービスを終了しています...")
     if difference_detector:
         difference_detector.shutdown()
+
 
 def run_main_loop(running_flag: Callable[[], bool]) -> None:
     """
@@ -60,62 +62,96 @@ def run_main_loop(running_flag: Callable[[], bool]) -> None:
     config = Config()
     window_capture = WindowCapture(config.get("TARGET_WINDOW_TITLE", "LDPlayer"))
     difference_detector = DifferenceDetector(config)
-    
+
     if config.get("MEMORY_WATCHER_ENABLED", "false").lower() == "true":
         memory_watcher = MemoryWatcher(config)
         memory_watcher.start()
         logger.info("メモリ監視を開始しました")
-    
+
     capture_interval = float(config.get("CAPTURE_INTERVAL", "1.0"))
     notification_sound = config.get("NOTIFICATION_SOUND", "true").lower() == "true"
-    
+
     try:
         while running_flag():
             loop_start_time = time.time()
             try:
                 # 差異検出サービスが終了中なら待機
-                if difference_detector and difference_detector.is_shutting_down.is_set():
+                if (
+                    difference_detector
+                    and difference_detector.is_shutting_down.is_set()
+                ):
                     time.sleep(0.1)
                     continue
-                
+
                 frame = window_capture.capture()
                 if frame is None:
-                    logger.warning("ウィンドウのキャプチャに失敗しました。次のフレームを試みます...")
+                    logger.warning(
+                        "ウィンドウのキャプチャに失敗しました。次のフレームを試みます..."
+                    )
                     time.sleep(capture_interval)
                     continue
-                
+
                 # 差異検出サービスが終了中なら待機
-                if difference_detector and difference_detector.is_shutting_down.is_set():
+                if (
+                    difference_detector
+                    and difference_detector.is_shutting_down.is_set()
+                ):
                     continue
-                
+
                 # 画像の差異を検出
-                if difference_detector and not difference_detector.is_shutting_down.is_set():
-                    has_difference, debug_image, diff_score = difference_detector.compare_frames(frame)
-                    
+                if (
+                    difference_detector
+                    and not difference_detector.is_shutting_down.is_set()
+                ):
+                    has_difference, debug_image, diff_score = (
+                        difference_detector.compare_frames(frame)
+                    )
+
                     # 差異検出サービスが終了中なら待機
                     if difference_detector.is_shutting_down.is_set():
                         continue
-                    
+
                     # 差異がある場合は通知
                     if has_difference:
-                        logger.info(f"画面の変化を検知しました: スコア {diff_score:.4f}")
-                        
+                        logger.info(
+                            f"画面の変化を検知しました: スコア {diff_score:.4f}"
+                        )
+
                         # 通知音を鳴らす
                         if notification_sound:
                             try:
                                 # ビープ音で通知
-                                beep_frequency = int(config.get("NOTIFICATION_BEEP_FREQUENCY", "1000"))  # デフォルト 1000Hz
-                                beep_duration = int(config.get("NOTIFICATION_BEEP_DURATION", "200"))     # デフォルト 200ミリ秒
+                                beep_frequency = int(
+                                    config.get("NOTIFICATION_BEEP_FREQUENCY", "1000")
+                                )  # デフォルト 1000Hz
+                                beep_duration = int(
+                                    config.get("NOTIFICATION_BEEP_DURATION", "200")
+                                )  # デフォルト 200ミリ秒
                                 winsound.Beep(beep_frequency, beep_duration)
                             except Exception as e:
-                                logger.error(f"通知音の再生中にエラーが発生しました: {e}", exc_info=True)
-                
+                                logger.error(
+                                    f"通知音の再生中にエラーが発生しました: {e}",
+                                    exc_info=True,
+                                )
+
                 elapsed_time = time.time() - loop_start_time
-                if elapsed_time < capture_interval and running_flag() and (not difference_detector or not difference_detector.is_shutting_down.is_set()):
+                if (
+                    elapsed_time < capture_interval
+                    and running_flag()
+                    and (
+                        not difference_detector
+                        or not difference_detector.is_shutting_down.is_set()
+                    )
+                ):
                     time.sleep(capture_interval - elapsed_time)
             except Exception as e:
-                if running_flag() and (not difference_detector or not difference_detector.is_shutting_down.is_set()):
-                    logger.error(f"メインループでエラーが発生しました: {e}", exc_info=True)
+                if running_flag() and (
+                    not difference_detector
+                    or not difference_detector.is_shutting_down.is_set()
+                ):
+                    logger.error(
+                        f"メインループでエラーが発生しました: {e}", exc_info=True
+                    )
                     time.sleep(1)
                 else:
                     logger.debug(f"終了処理中にエラーが発生しました: {e}")
