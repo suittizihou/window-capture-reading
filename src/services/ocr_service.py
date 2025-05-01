@@ -9,12 +9,15 @@ import tempfile
 import hashlib
 import time
 import threading
-from typing import Dict, Optional, Any, Tuple
+import io
+from typing import Dict, Optional, Any, Tuple, Union, List, cast
 from pathlib import Path
 import cv2
 import numpy as np
-import pytesseract
+from numpy.typing import NDArray
+import pytesseract  # type: ignore
 from PIL import Image, ImageDraw, ImageFont
+from PIL.ImageFont import FreeTypeFont
 from src.utils.messages import MessageManager
 from src.utils.performance import PerformanceMonitor, Cache
 from src.utils.config import Config
@@ -24,6 +27,8 @@ message_manager = MessageManager()
 performance_monitor = PerformanceMonitor()
 cache = Cache()
 
+# 画像処理関連の型定義
+ImageArray = NDArray[np.uint8]
 
 class OCRService:
     """OCRテキスト認識サービスクラス。
@@ -39,150 +44,74 @@ class OCRService:
         """
         self.logger = logging.getLogger(__name__)
 
-        # 設定オブジェクトを保存
+        # 設定を保存
         self.config = config
 
         # Tesseractの設定
-        self.tesseract_path = config.get(
-            "TESSERACT_PATH", r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
-        )
-        self.tesseract_lang = config.get("TESSERACT_LANG", "jpn")
-        self.tesseract_config = config.get("TESSERACT_CONFIG", "--psm 6")
+        tesseract_path = getattr(config, "TESSERACT_PATH", r"C:\Program Files\Tesseract-OCR\tesseract.exe")
+        if not os.path.exists(tesseract_path):
+            self.logger.error(f"Tesseractが見つかりません: {tesseract_path}")
+            raise FileNotFoundError(f"Tesseractが見つかりません: {tesseract_path}")
+        pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
-        # Tesseractパスの設定
-        if os.path.exists(self.tesseract_path):
-            pytesseract.pytesseract.tesseract_cmd = self.tesseract_path
-        else:
-            self.logger.warning(
-                f"指定されたTesseractのパスが見つかりません: {self.tesseract_path}"
-            )
-            self.logger.warning(
-                "PATHからTesseractを探します。環境変数にTesseractのパスが設定されていることを確認してください。"
-            )
-
-        # プリプロセスの設定
-        self.use_grayscale = config.get("OCR_USE_GRAYSCALE", "true").lower() == "true"
-        self.use_blur = config.get("OCR_USE_BLUR", "true").lower() == "true"
-        self.use_threshold = config.get("OCR_USE_THRESHOLD", "true").lower() == "true"
-        self.blur_kernel = int(config.get("OCR_BLUR_KERNEL", "5"))
-        self.threshold_method = config.get("OCR_THRESHOLD_METHOD", "adaptive")
-        self.contrast_alpha = float(config.get("OCR_CONTRAST_ALPHA", "1.0"))
-        self.contrast_beta = int(config.get("OCR_CONTRAST_BETA", "0"))
+        # OCRの設定
+        self.language = getattr(config, "OCR_LANGUAGE", "jpn")
+        self.config_str = getattr(config, "OCR_CONFIG", "--psm 6")
+        self.preprocessing_enabled = getattr(config, "OCR_PREPROCESSING_ENABLED", True)
 
         # キャッシュの設定
-        self.use_cache = config.get("OCR_USE_CACHE", "true").lower() == "true"
-        self.cache: Dict[str, Tuple[str, float]] = {}
-        self.cache_ttl = float(
-            config.get("OCR_CACHE_TTL", "5.0")
-        )  # キャッシュのTTL（秒）
+        self.cache_enabled = getattr(config, "OCR_CACHE_ENABLED", True)
+        self.cache_dir = Path(getattr(config, "OCR_CACHE_DIR", "cache"))
+        if self.cache_enabled:
+            os.makedirs(self.cache_dir, exist_ok=True)
 
-        # 終了フラグ（スレッドセーフ）
-        self.is_shutting_down = threading.Event()
-
-        # テスト実行（オプション）
-        test_on_init = config.get("OCR_TEST_ON_INIT", "false").lower() == "true"
-        if test_on_init:
-            self.test_ocr()
-
-    def extract_text(self, image: np.ndarray) -> Optional[str]:
-        """画像からテキストを抽出します。
+    def recognize_text(self, image: Union[Image.Image, ImageArray]) -> str:
+        """画像からテキストを認識します。
 
         Args:
-            image: テキストを抽出する画像（OpenCV形式のnumpy.ndarrayまたはPIL.Image.Image）
+            image: 認識対象の画像（PIL ImageまたはNumPy配列）
 
         Returns:
-            抽出されたテキスト、または抽出に失敗した場合はNone
+            認識されたテキスト
         """
-        # 終了処理中の場合は早期リターン
-        if self.is_shutting_down.is_set():
-            self.logger.debug("終了処理中のためOCR処理をスキップします")
-            return None
-
-        # PIL.Image.Image型ならnp.ndarrayに変換
-        if isinstance(image, Image.Image):
-            image = np.array(image)
-
         try:
-            # 処理途中で終了されたかどうかを頻繁にチェック
+            # 画像の前処理
+            if isinstance(image, np.ndarray):
+                image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
-            # キャッシュのチェック
-            if self.use_cache:
-                # 終了フラグの再チェック
-                if self.is_shutting_down.is_set():
-                    return None
-
-                # 画像のハッシュを作成
-                img_hash = hashlib.md5(image.tobytes()).hexdigest()
-
-                # キャッシュからテキストを取得（存在する場合）
-                if img_hash in self.cache:
-                    cached_text, timestamp = self.cache[img_hash]
-
-                    # キャッシュが期限内かチェック
-                    if time.time() - timestamp <= self.cache_ttl:
-                        self.logger.debug("キャッシュからテキストを取得しました")
-                        return cached_text
-                    else:
-                        # 期限切れのキャッシュを削除
-                        del self.cache[img_hash]
-
-            # 終了フラグの再チェック
-            if self.is_shutting_down.is_set():
-                self.logger.debug("前処理前の終了処理中のためOCR処理をスキップします")
-                return None
+            # キャッシュをチェック
+            if self.cache_enabled:
+                cache_key = self._generate_cache_key(image)
+                cached_text = self._get_from_cache(cache_key)
+                if cached_text is not None:
+                    return cached_text
 
             # 画像の前処理
-            processed_image = self._preprocess_image(image)
+            if self.preprocessing_enabled:
+                image = self._preprocess_image(image)
 
-            # 終了処理中の場合は早期リターン
-            if self.is_shutting_down.is_set():
-                self.logger.debug("前処理後の終了処理中のためOCR処理をスキップします")
-                return None
-
-            # OCR処理
-            # OCR処理は時間がかかるため、ここで終了フラグを再度チェック
-            if self.is_shutting_down.is_set():
-                self.logger.debug("OCR処理直前の終了処理中のためスキップします")
-                return None
-
-            text = pytesseract.image_to_string(
-                processed_image, lang=self.tesseract_lang, config=self.tesseract_config
+            # OCRを実行
+            ocr_result = pytesseract.image_to_string(
+                image,
+                lang=self.language,
+                config=self.config_str
             )
+            
+            # 戻り値の型が不定でない場合は文字列に変換
+            text = str(ocr_result) if ocr_result is not None else ""
 
-            # 終了フラグの再チェック
-            if self.is_shutting_down.is_set():
-                self.logger.debug(
-                    "OCR処理後の終了処理中のためテキスト処理をスキップします"
-                )
-                return None
+            # キャッシュに保存
+            if self.cache_enabled:
+                self._save_to_cache(cache_key, text)
 
-            # 結果の処理
-            if text:
-                # 新しい行だけをスペースに置換
-                text = text.replace("\n", " ").strip()
-
-                # キャッシュに追加
-                if self.use_cache and not self.is_shutting_down.is_set():
-                    self.cache[img_hash] = (text, time.time())
-
-                return text
-
-            return None
+            return text.strip()
 
         except Exception as e:
-            # 終了処理中にエラーが発生した場合はログレベルを下げる
-            if self.is_shutting_down.is_set():
-                self.logger.debug(
-                    f"終了処理中にテキスト抽出のエラーが発生しました: {e}"
-                )
-            else:
-                self.logger.error(
-                    f"テキスト抽出中にエラーが発生しました: {e}", exc_info=True
-                )
-            return None
+            self.logger.error(f"テキスト認識中にエラー: {e}")
+            return ""
 
-    def _preprocess_image(self, image: np.ndarray) -> np.ndarray:
-        """OCR精度向上のために画像を前処理します。
+    def _preprocess_image(self, image: Image.Image) -> Image.Image:
+        """画像を前処理します。
 
         Args:
             image: 前処理する画像
@@ -190,242 +119,79 @@ class OCRService:
         Returns:
             前処理された画像
         """
-        # 終了処理中の場合は早期リターン
-        if self.is_shutting_down.is_set():
-            return image
-
         try:
-            # コピーを作成して元の画像を保持
-            processed = image.copy()
+            # グレースケールに変換
+            image = image.convert("L")
 
-            # 終了フラグをチェック
-            if self.is_shutting_down.is_set():
-                return image
+            # NumPy配列に変換
+            img_array = np.array(image)
 
-            # グレースケール変換
-            if self.use_grayscale and len(processed.shape) > 2:
-                processed = cv2.cvtColor(processed, cv2.COLOR_BGR2GRAY)
+            # ノイズ除去
+            img_array = cv2.medianBlur(img_array, 3)
 
-            # 終了フラグをチェック
-            if self.is_shutting_down.is_set():
-                return processed
+            # 二値化
+            _, img_array = cv2.threshold(
+                img_array, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+            )
 
-            # コントラスト調整
-            if self.contrast_alpha != 1.0 or self.contrast_beta != 0:
-                processed = cv2.convertScaleAbs(
-                    processed, alpha=self.contrast_alpha, beta=self.contrast_beta
-                )
-
-            # 終了フラグをチェック
-            if self.is_shutting_down.is_set():
-                return processed
-
-            # ノイズ除去（ぼかし）
-            if self.use_blur and self.blur_kernel > 0:
-                processed = cv2.GaussianBlur(
-                    processed, (self.blur_kernel, self.blur_kernel), 0
-                )
-
-            # 終了フラグをチェック
-            if self.is_shutting_down.is_set():
-                return processed
-
-            # 二値化処理
-            if self.use_threshold:
-                if self.threshold_method == "adaptive":
-                    # 適応的しきい値処理
-                    processed = cv2.adaptiveThreshold(
-                        processed,
-                        255,
-                        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                        cv2.THRESH_BINARY,
-                        11,
-                        2,
-                    )
-                elif self.threshold_method == "otsu" and len(processed.shape) == 2:
-                    # 大津の二値化（グレースケール画像のみ）
-                    _, processed = cv2.threshold(
-                        processed, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
-                    )
-                else:
-                    # 単純な二値化
-                    _, processed = cv2.threshold(processed, 127, 255, cv2.THRESH_BINARY)
-
-            return processed
+            # PIL Imageに戻す
+            return Image.fromarray(img_array)
 
         except Exception as e:
-            if self.is_shutting_down.is_set():
-                self.logger.debug(f"終了処理中に前処理でエラーが発生しました: {e}")
-            else:
-                self.logger.error(
-                    f"画像の前処理中にエラーが発生しました: {e}", exc_info=True
-                )
-            # エラーが発生した場合、必ず元の画像を返す
+            self.logger.error(f"画像の前処理中にエラー: {e}")
             return image
 
-    def test_ocr(self) -> bool:
-        """OCRエンジンの機能をテストします。
+    def _generate_cache_key(self, image: Image.Image) -> str:
+        """画像のキャッシュキーを生成します。
+
+        Args:
+            image: キャッシュキーを生成する画像
 
         Returns:
-            テストが成功した場合はTrue、失敗した場合はFalse
+            キャッシュキー
         """
-        # 終了処理中の場合は早期リターン
-        if self.is_shutting_down.is_set():
-            self.logger.warning("終了処理中のためOCRテストをスキップします")
-            return False
-
         try:
-            self.logger.info("OCRエンジンのテストを実行しています...")
+            # 画像をバイト列に変換
+            with io.BytesIO() as bio:
+                image.save(bio, format="PNG")
+                img_bytes = bio.getvalue()
 
-            # テスト用の簡単な画像を生成
-            width, height = 200, 50
-            image = Image.new("RGB", (width, height), color="white")
-            draw = ImageDraw.Draw(image)
-
-            # 終了フラグをチェック
-            if self.is_shutting_down.is_set():
-                self.logger.warning(
-                    "テスト画像生成後に終了フラグが設定されたためテストを中断します"
-                )
-                return False
-
-            # フォントの設定（デフォルトフォント）
-            try:
-                font_path = str(
-                    Path(__file__).parent.parent.parent
-                    / "resources"
-                    / "fonts"
-                    / "meiryo.ttc"
-                )
-                if os.path.exists(font_path):
-                    font = ImageFont.truetype(font_path, 24)
-                else:
-                    # デフォルトフォントを使用
-                    font = ImageFont.load_default()
-            except Exception as e:
-                self.logger.warning(f"フォント読み込みエラー: {e}")
-                font = ImageFont.load_default()
-
-            # 終了フラグをチェック
-            if self.is_shutting_down.is_set():
-                self.logger.warning(
-                    "フォント設定後に終了フラグが設定されたためテストを中断します"
-                )
-                return False
-
-            # テキストを描画
-            test_text = "テストABC123"
-            draw.text((10, 10), test_text, fill="black", font=font)
-
-            # PIL ImageをOpenCV形式に変換
-            image_cv = np.array(image)
-
-            # 終了フラグをチェック
-            if self.is_shutting_down.is_set():
-                self.logger.warning(
-                    "画像変換後に終了フラグが設定されたためテストを中断します"
-                )
-                return False
-
-            # OCRでテキストを抽出
-            extracted_text = self.extract_text(image_cv)
-
-            # 終了フラグをチェック
-            if self.is_shutting_down.is_set():
-                self.logger.warning(
-                    "テキスト抽出後に終了フラグが設定されたためテストを中断します"
-                )
-                return False
-
-            if extracted_text:
-                self.logger.info(f"OCRテスト結果: '{extracted_text}'")
-
-                # テスト文字列がどの程度含まれているかチェック
-                test_tokens = set(test_text.lower())
-                extracted_tokens = set(extracted_text.lower())
-                common_chars = test_tokens.intersection(extracted_tokens)
-
-                accuracy = len(common_chars) / len(test_tokens)
-                self.logger.info(
-                    f"OCR精度: {accuracy:.2f} ({len(common_chars)}/{len(test_tokens)} 文字一致)"
-                )
-
-                return accuracy > 0.5  # 50%以上の精度を成功と見なす
-            else:
-                self.logger.warning(
-                    "OCRテストに失敗しました: テキストが抽出できませんでした"
-                )
-                return False
+            # ハッシュを計算
+            return hashlib.md5(img_bytes).hexdigest()
 
         except Exception as e:
-            if self.is_shutting_down.is_set():
-                self.logger.warning(f"終了処理中にOCRテストでエラーが発生しました: {e}")
-            else:
-                self.logger.error(
-                    f"OCRテスト中にエラーが発生しました: {e}", exc_info=True
-                )
-            return False
+            self.logger.error(f"キャッシュキーの生成中にエラー: {e}")
+            return str(time.time())  # フォールバック
 
-    def shutdown(self) -> None:
-        """OCRサービスの終了処理を行います。リソースの解放やスレッドの停止などを行います。"""
+    def _get_from_cache(self, cache_key: str) -> Optional[str]:
+        """キャッシュからテキストを取得します。
+
+        Args:
+            cache_key: キャッシュキー
+
+        Returns:
+            キャッシュされたテキスト。存在しない場合はNone。
+        """
         try:
-            self.logger.info("OCRサービスの終了処理を開始します...")
+            cache_file = self.cache_dir / f"{cache_key}.txt"
+            if cache_file.exists():
+                return cache_file.read_text(encoding="utf-8")
+            return None
 
-            # 終了フラグを設定（まだ設定されていない場合）
-            if not self.is_shutting_down.is_set():
-                self.is_shutting_down.set()
-                self.logger.debug("OCRサービスの終了フラグを設定しました")
-
-            # 少し待機して実行中の処理が終了フラグを検出できるようにする
-            time.sleep(0.3)
-
-            # キャッシュのクリア
-            if hasattr(self, "cache") and self.cache:
-                self.cache.clear()
-                self.logger.debug("OCRキャッシュをクリアしました")
-
-            # pytesseractのセッションクリーン（一時ファイルの削除）
-            temp_dir = tempfile.gettempdir()
-            tesseract_temp_pattern = "tess_"
-
-            try:
-                # 一時ディレクトリ内のTesseract関連ファイルを検索して削除
-                for filename in os.listdir(temp_dir):
-                    if filename.startswith(tesseract_temp_pattern):
-                        file_path = os.path.join(temp_dir, filename)
-                        try:
-                            if os.path.isfile(file_path):
-                                os.unlink(file_path)
-                                self.logger.debug(
-                                    f"一時ファイルを削除しました: {file_path}"
-                                )
-                        except (PermissionError, OSError) as e:
-                            self.logger.debug(
-                                f"一時ファイルの削除中にエラーが発生しました: {e}"
-                            )
-            except Exception as e:
-                self.logger.debug(f"一時ファイルの処理中にエラーが発生しました: {e}")
-
-            # メモリリークを防ぐ追加の処理
-            import gc
-
-            gc.collect()
-
-            # pythonインタープリタに少し時間を与えてリソースを解放
-            time.sleep(0.2)
-
-            # 終了フラグが確実に設定されていることを再確認
-            if not self.is_shutting_down.is_set():
-                self.is_shutting_down.set()
-                self.logger.warning(
-                    "終了フラグが正しく設定されていなかったため、再設定しました"
-                )
-
-            self.logger.info("OCRサービスの終了処理が完了しました")
         except Exception as e:
-            # 例外が発生しても終了フラグは必ず設定する
-            if not self.is_shutting_down.is_set():
-                self.is_shutting_down.set()
-            self.logger.error(
-                f"OCRサービスの終了処理中にエラーが発生しました: {e}", exc_info=True
-            )
+            self.logger.error(f"キャッシュの読み込み中にエラー: {e}")
+            return None
+
+    def _save_to_cache(self, cache_key: str, text: str) -> None:
+        """テキストをキャッシュに保存します。
+
+        Args:
+            cache_key: キャッシュキー
+            text: 保存するテキスト
+        """
+        try:
+            cache_file = self.cache_dir / f"{cache_key}.txt"
+            cache_file.write_text(text, encoding="utf-8")
+
+        except Exception as e:
+            self.logger.error(f"キャッシュの保存中にエラー: {e}")

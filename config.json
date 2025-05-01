@@ -1,0 +1,15 @@
+{
+  "window_title": "",
+  "capture_interval": 1.0,
+  "diff_threshold": 0.05,
+  "diff_method": "ssim",
+  "diff_max_history": 10,
+  "diff_debug_mode": false,
+  "ocr_enabled": true,
+  "ocr_language": "jpn",
+  "ocr_threshold": 0.7,
+  "notification_sound": true,
+  "notification_popup": true,
+  "notification_flash": false,
+  "notification_cooldown": 2.0
+}

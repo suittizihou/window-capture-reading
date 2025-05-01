@@ -9,296 +9,218 @@ import time
 import numpy as np
 import cv2
 from PIL import Image
-from typing import Tuple, Optional, Dict, Any, List
+from typing import Tuple, Optional, Dict, Any, List, cast, Union, NamedTuple
+from numpy.typing import NDArray
 
 from src.utils.config import Config
 
+# 画像処理関連の型定義
+ImageArray = NDArray[np.uint8]
+
+class DiffResult(NamedTuple):
+    """差分検出結果を表す型。"""
+    has_difference: bool
+    diff_image: ImageArray
+    score: float
+    text_changes: List[str] = []
 
 class DifferenceDetector:
     """画面の差分を検知するクラス。"""
 
-    def __init__(self, config: Config) -> None:
+    def __init__(
+        self, 
+        threshold: float = 0.05, 
+        ocr_enabled: bool = True, 
+        ocr_language: str = "jpn", 
+        ocr_threshold: float = 0.7
+    ) -> None:
         """DifferenceDetectorを初期化します。
 
         Args:
-            config: 設定オブジェクト
+            threshold: 差分検出の閾値
+            ocr_enabled: OCR機能を有効にするかどうか
+            ocr_language: OCRの言語
+            ocr_threshold: OCRの検出閾値
         """
         self.logger = logging.getLogger(__name__)
 
         # 設定を保存
-        self.config = config
+        self.threshold = threshold
+        self.ocr_enabled = ocr_enabled
+        self.ocr_language = ocr_language
+        self.ocr_threshold = ocr_threshold
+        self.cooldown = 1.0
+        self.max_history = 10
+        self.debug_mode = False
 
-        # 設定から値を読み込む
-        self.threshold = float(config.get("DIFF_THRESHOLD", "0.05"))
-        self.method = config.get("DIFF_METHOD", "ssim")
-        self.cooldown = float(config.get("DIFF_COOLDOWN", "1.0"))
-        self.max_history = int(config.get("DIFF_MAX_HISTORY", "10"))
-        self.debug_mode = config.get("DIFF_DEBUG_MODE", "false").lower() == "true"
-
-        # 前回の比較結果
-        self.last_diff_time = 0
-        self.history: List[Image.Image] = []
-
-        # 終了フラグ
+        # 内部状態の初期化
+        self.prev_frame: Optional[ImageArray] = None
+        self.last_diff_time = 0.0
+        self.frame_history: List[ImageArray] = []
         self.is_shutting_down = threading.Event()
 
-    def compare_frames(
-        self, current_image: Image.Image
-    ) -> Tuple[bool, Optional[Image.Image], float]:
-        """現在のフレームと過去のフレームを比較し、差分を検出します。
-
-        Args:
-            current_image: 現在のフレーム画像
-
-        Returns:
-            差分があるかどうか、デバッグ画像（あれば）、差分スコア
-        """
-        # 終了処理中の場合は早期リターン
-        if self.is_shutting_down.is_set():
-            return False, None, 0.0
-
-        try:
-            # 履歴が空の場合は追加して終了
-            if len(self.history) == 0:
-                self.history.append(current_image.copy())
-                return False, current_image, 0.0
-
-            # 前回の画像を取得
-            prev_image = self.history[-1]
-
-            # クールダウン期間中は差分なしとする
-            now = time.time()
-            if now - self.last_diff_time < self.cooldown:
-                return False, current_image, 0.0
-
-            # 終了処理中の場合は早期リターン
-            if self.is_shutting_down.is_set():
-                return False, None, 0.0
-
-            # 2つの画像間の差分を検出
-            has_diff, diff_ratio, result_image = self.detect_difference(
-                prev_image, current_image
-            )
-
-            # 差分がある場合は履歴に追加
-            if has_diff:
-                self.last_diff_time = now
-                # 履歴が最大数を超えたら古いものを削除
-                if len(self.history) >= self.max_history:
-                    self.history.pop(0)
-                self.history.append(current_image.copy())
-
-            return has_diff, result_image, diff_ratio
-
-        except Exception as e:
-            if self.is_shutting_down.is_set():
-                self.logger.debug(f"終了処理中に差分検知エラーが発生: {e}")
-            else:
-                self.logger.error(f"差分検知エラー: {e}", exc_info=True)
-            return False, current_image, 0.0
-
-    def detect_difference(
-        self, prev_image: Image.Image, current_image: Image.Image
-    ) -> Tuple[bool, float, Image.Image]:
+    def detect(self, prev_image: ImageArray, current_image: ImageArray) -> DiffResult:
         """2つの画像間の差分を検出します。
 
         Args:
-            prev_image: 前回の画像
+            prev_image: 前の画像
             current_image: 現在の画像
 
         Returns:
-            差分があったかどうか、差分の割合（%）、差分を可視化した画像のタプル
+            差分検出結果
         """
         try:
-            # 終了処理中の場合は早期リターン
-            if self.is_shutting_down.is_set():
-                return False, 0.0, current_image
-
-            # PIL ImageをOpenCV形式に変換
-            prev_cv = self._pil_to_cv(prev_image)
-            current_cv = self._pil_to_cv(current_image)
-
-            # サイズが異なる場合はリサイズ
-            if prev_cv.shape != current_cv.shape:
-                h, w = current_cv.shape[:2]
-                prev_cv = cv2.resize(prev_cv, (w, h))
-
             # グレースケールに変換
-            if len(prev_cv.shape) > 2:
-                prev_gray = cv2.cvtColor(prev_cv, cv2.COLOR_BGR2GRAY)
-                current_gray = cv2.cvtColor(current_cv, cv2.COLOR_BGR2GRAY)
-            else:
-                prev_gray = prev_cv
-                current_gray = current_cv
+            gray1 = cv2.cvtColor(prev_image, cv2.COLOR_BGR2GRAY)
+            gray2 = cv2.cvtColor(current_image, cv2.COLOR_BGR2GRAY)
 
-            # 選択された方法で差分を検出
-            if self.method == "ssim":
-                # SSIM（構造的類似性）で比較
-                return self._detect_with_ssim(prev_gray, current_gray, current_cv)
-            else:
-                # デフォルトの絶対差分で比較
-                return self._detect_with_absdiff(prev_gray, current_gray, current_cv)
+            # SSIMを計算
+            score = self._compute_ssim(cast(NDArray[np.uint8], gray1), cast(NDArray[np.uint8], gray2))
+            has_diff = score < (1.0 - self.threshold)
 
+            # 差分画像を生成
+            diff_image = self._create_diff_image(
+                prev_image, 
+                current_image, 
+                cast(NDArray[np.uint8], gray1), 
+                cast(NDArray[np.uint8], gray2)
+            )
+
+            # OCRによるテキスト変更の検出
+            text_changes = self._detect_text_changes(prev_image, current_image) if self.ocr_enabled and has_diff else []
+
+            return DiffResult(
+                has_difference=has_diff,
+                diff_image=diff_image,
+                score=score,
+                text_changes=text_changes
+            )
         except Exception as e:
-            if self.is_shutting_down.is_set():
-                self.logger.debug(f"終了処理中に差分検知中にエラー: {e}")
-            else:
-                self.logger.error(f"差分検知中にエラー: {e}", exc_info=True)
-            # エラー時は差分なしと判断し、現在の画像をそのまま返す
-            return False, 0.0, current_image
+            self.logger.error(f"差分検出エラー: {e}", exc_info=True)
+            # エラーの場合は差分なしとする
+            empty_image = np.zeros_like(current_image)
+            return DiffResult(has_difference=False, diff_image=empty_image, score=1.0)
 
-    def _detect_with_absdiff(
-        self, prev_gray: np.ndarray, current_gray: np.ndarray, current_cv: np.ndarray
-    ) -> Tuple[bool, float, Image.Image]:
-        """絶対差分による差分検出を行います。
+    def _create_diff_image(
+        self, 
+        img1: ImageArray, 
+        img2: ImageArray, 
+        gray1: ImageArray, 
+        gray2: ImageArray
+    ) -> ImageArray:
+        """2つの画像から差分画像を生成します。
 
         Args:
-            prev_gray: 前回のグレースケール画像
-            current_gray: 現在のグレースケール画像
-            current_cv: 現在のカラー画像
+            img1: 比較する画像1
+            img2: 比較する画像2
+            gray1: グレースケール画像1
+            gray2: グレースケール画像2
 
         Returns:
-            差分があったかどうか、差分の割合（%）、差分を可視化した画像のタプル
+            差分を可視化した画像
         """
-        # 画像の差分を計算
-        diff = cv2.absdiff(prev_gray, current_gray)
-        _, thresh = cv2.threshold(
-            diff, int(self.threshold * 255), 255, cv2.THRESH_BINARY
+        # 絶対差分を計算
+        diff = cv2.absdiff(gray1, gray2)
+        
+        # 閾値処理
+        _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+        
+        # 膨張処理（差分部分を強調）
+        kernel = np.ones((5, 5), np.uint8)
+        dilated = cv2.dilate(thresh, kernel, iterations=2)
+        
+        # 輪郭を検出
+        contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # 差分部分を強調した画像を作成
+        result = img2.copy()
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area > 100:  # 小さすぎる差分は無視
+                (x, y, w, h) = cv2.boundingRect(contour)
+                cv2.rectangle(result, (x, y), (x + w, y + h), (0, 0, 255), 2)
+                
+        return result
+
+    def _detect_text_changes(self, img1: ImageArray, img2: ImageArray) -> List[str]:
+        """2つの画像間のテキスト変更を検出します。
+
+        Args:
+            img1: 比較する画像1
+            img2: 比較する画像2
+
+        Returns:
+            変更されたテキストのリスト
+        """
+        # OCRが実装されていない場合は空のリストを返す
+        return []
+
+    def detect_difference(self, frame: ImageArray) -> bool:
+        """画像の差分を検出する。（後方互換性のため残しています）
+
+        Args:
+            frame: 比較する画像
+
+        Returns:
+            差分が検出された場合はTrue
+        """
+        if self.is_shutting_down.is_set():
+            return False
+
+        # クールダウン中は検出しない
+        if time.time() - self.last_diff_time < self.cooldown:
+            return False
+
+        # 前回のフレームがない場合は保存して終了
+        if self.prev_frame is None:
+            self.prev_frame = frame
+            return False
+
+        # 差分を検出
+        result = self.detect(self.prev_frame, frame)
+        has_difference = result.has_difference
+
+        # 差分を検出した場合は履歴を更新
+        if has_difference:
+            self.last_diff_time = time.time()
+            self.frame_history.append(frame)
+            if len(self.frame_history) > self.max_history:
+                self.frame_history.pop(0)
+
+        # 現在のフレームを保存
+        self.prev_frame = frame
+
+        return has_difference
+
+    def _compute_ssim(self, img1: NDArray[np.uint8], img2: NDArray[np.uint8]) -> float:
+        """SSIMスコアを計算する。
+
+        Args:
+            img1: 比較する画像1
+            img2: 比較する画像2
+
+        Returns:
+            SSIMスコア
+        """
+        C1 = (0.01 * 255) ** 2
+        C2 = (0.03 * 255) ** 2
+
+        # 画像の統計量を計算
+        mu1 = cv2.GaussianBlur(img1, (11, 11), 1.5)
+        mu2 = cv2.GaussianBlur(img2, (11, 11), 1.5)
+        mu1_sq = mu1 * mu1
+        mu2_sq = mu2 * mu2
+        mu1_mu2 = mu1 * mu2
+        sigma1_sq = cv2.GaussianBlur(img1 * img1, (11, 11), 1.5) - mu1_sq
+        sigma2_sq = cv2.GaussianBlur(img2 * img2, (11, 11), 1.5) - mu2_sq
+        sigma12 = cv2.GaussianBlur(img1 * img2, (11, 11), 1.5) - mu1_mu2
+
+        # SSIMを計算
+        ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / (
+            (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
         )
 
-        # 膨張・収縮でノイズを除去
-        kernel = np.ones((5, 5), np.uint8)
-        dilated = cv2.dilate(thresh, kernel, iterations=1)
-
-        # 差分ピクセル数をカウント
-        diff_pixels = np.count_nonzero(dilated)
-        total_pixels = dilated.size
-        diff_ratio = (diff_pixels / total_pixels) * 100
-
-        # 最小面積（100ピクセル）を超える場合は差分あり
-        has_diff = diff_pixels > 100
-
-        # 差分画像の作成
-        if has_diff or self.debug_mode:
-            # カラー画像に戻して赤色でマーク
-            result = current_cv.copy()
-
-            # マスクを3チャンネルに変換してカラー画像にする
-            mask_3ch = cv2.cvtColor(dilated, cv2.COLOR_GRAY2BGR)
-            # 赤色でマスク
-            red_mask = np.zeros_like(mask_3ch)
-            red_mask[:, :, 2] = mask_3ch[:, :, 0]  # 赤チャンネルにマスクを適用
-
-            # 元画像と差分マスクを合成（半透明）
-            alpha = 0.5
-            result = cv2.addWeighted(result, 1.0, red_mask, alpha, 0)
-
-            # OpenCV BGR -> PIL RGB
-            result_pil = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
-        else:
-            # 差分がない場合は現在の画像をそのまま返す
-            result_pil = Image.fromarray(cv2.cvtColor(current_cv, cv2.COLOR_BGR2RGB))
-
-        return has_diff, diff_ratio, result_pil
-
-    def _detect_with_ssim(
-        self, prev_gray: np.ndarray, current_gray: np.ndarray, current_cv: np.ndarray
-    ) -> Tuple[bool, float, Image.Image]:
-        """SSIM（構造的類似性）による差分検出を行います。
-
-        Args:
-            prev_gray: 前回のグレースケール画像
-            current_gray: 現在のグレースケール画像
-            current_cv: 現在のカラー画像
-
-        Returns:
-            差分があったかどうか、差分の割合（%）、差分を可視化した画像のタプル
-        """
-        try:
-            # skimage.metricsからSSIMをインポート
-            from skimage.metrics import structural_similarity
-
-            # SSIMスコアを計算（1.0が完全一致、0.0が完全不一致）
-            ssim_score, diff = structural_similarity(
-                prev_gray, current_gray, full=True, data_range=255
-            )
-
-            # SSIM差分マップを[0, 1]から[0, 255]に変換
-            diff = (1 - diff) * 255
-            diff = diff.astype(np.uint8)
-
-            # 閾値処理
-            _, thresh = cv2.threshold(
-                diff, int(self.threshold * 255), 255, cv2.THRESH_BINARY
-            )
-
-            # 輪郭検出
-            contours, _ = cv2.findContours(
-                thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-            )
-
-            # 差分領域の面積をチェック
-            total_area = 0
-            for contour in contours:
-                area = cv2.contourArea(contour)
-                total_area += area
-
-            # 全体に対する割合を計算
-            total_pixels = prev_gray.size
-            diff_ratio = (total_area / total_pixels) * 100
-
-            # 最小面積（100ピクセル）を超える場合は差分あり
-            has_diff = total_area > 100
-
-            # デバッグモードまたは差分がある場合は視覚化
-            if has_diff or self.debug_mode:
-                # 結果画像を作成
-                result = current_cv.copy()
-
-                # 差分領域を赤色で描画
-                cv2.drawContours(result, contours, -1, (0, 0, 255), 2)
-
-                # 各輪郭について矩形で囲む
-                for c in contours:
-                    if cv2.contourArea(c) > 100:  # 一定サイズ以上の輪郭のみ
-                        (x, y, w, h) = cv2.boundingRect(c)
-                        cv2.rectangle(result, (x, y), (x + w, y + h), (0, 0, 255), 2)
-
-                # OpenCV BGR -> PIL RGB
-                result_pil = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
-            else:
-                # 差分がない場合は現在の画像をそのまま返す
-                result_pil = Image.fromarray(
-                    cv2.cvtColor(current_cv, cv2.COLOR_BGR2RGB)
-                )
-
-            return has_diff, diff_ratio, result_pil
-
-        except Exception as e:
-            self.logger.error(f"SSIM差分検出中にエラー: {e}", exc_info=True)
-            # エラー時は絶対差分法を使用
-            return self._detect_with_absdiff(prev_gray, current_gray, current_cv)
-
-    def _pil_to_cv(self, pil_image: Image.Image) -> np.ndarray:
-        """PIL画像をOpenCV形式に変換します。
-
-        Args:
-            pil_image: PIL画像
-
-        Returns:
-            OpenCV形式の画像（BGR）
-        """
-        # PIL画像をRGBに変換
-        if pil_image.mode != "RGB":
-            pil_image = pil_image.convert("RGB")
-
-        # PIL -> NumPy配列（RGB）
-        np_image = np.array(pil_image)
-
-        # RGB -> BGR（OpenCVの形式）
-        cv_image = cv2.cvtColor(np_image, cv2.COLOR_RGB2BGR)
-
-        return cv_image
+        return float(ssim_map.mean())
 
     def shutdown(self) -> None:
         """終了処理を行います。"""
@@ -306,4 +228,5 @@ class DifferenceDetector:
         self.logger.info("差分検知モジュールを終了しています")
 
         # 履歴をクリア
-        self.history.clear()
+        self.frame_history.clear()
+        self.prev_frame = None

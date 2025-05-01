@@ -4,14 +4,16 @@ Win32 APIを使用して、指定されたウィンドウのキャプチャを�
 """
 
 import logging
-from ctypes import windll, byref, c_ubyte
+from ctypes import windll, byref, c_ubyte, Array, Structure, c_long, c_ulong, c_void_p, c_ushort, sizeof
 from ctypes.wintypes import BOOL, HWND, HDC, RECT
-from typing import Optional, Tuple
-
-import cv2
+from typing import Optional, Tuple, Any, cast
 import numpy as np
+from numpy.typing import NDArray
+import cv2
 from PIL import Image
 
+# 画像処理関連の型定義
+ImageArray = NDArray[np.uint8]
 
 class WindowCapture:
     """ウィンドウキャプチャ機能を提供するクラス。"""
@@ -32,43 +34,49 @@ class WindowCapture:
         # DPIスケーリング対応
         try:
             windll.user32.SetProcessDPIAware()
-        except Exception:
-            pass  # 失敗しても無視
+        except Exception as e:
+            self.logger.warning(f"DPIスケーリング設定に失敗しました: {e}")
 
     def find_window(self) -> Optional[HWND]:
         """指定されたタイトルのウィンドウハンドルを取得します。
 
         Returns:
-            Optional[HWND]: ウィンドウハンドル。見つからない場合はNone。
+            ウィンドウハンドル。見つからない場合はNone。
         """
-        hwnd = self.user32.FindWindowW(None, self.window_title)
-        if not hwnd:
-            self.logger.warning(
-                f"ウィンドウ'{self.window_title}'が見つかりませんでした"
-            )
+        try:
+            hwnd = self.user32.FindWindowW(None, self.window_title)
+            if not hwnd:
+                self.logger.warning(f"ウィンドウが見つかりません: {self.window_title}")
+                return None
+            return cast(HWND, hwnd)
+        except Exception as e:
+            self.logger.error(f"ウィンドウの検索中にエラー: {e}")
             return None
-        return hwnd
 
-    def get_window_rect(self, hwnd: HWND) -> Optional[RECT]:
-        """ウィンドウの矩形情報を取得します。
+    def get_window_rect(self, hwnd: HWND) -> Optional[Tuple[int, int, int, int]]:
+        """ウィンドウの位置とサイズを取得します。
 
         Args:
             hwnd: ウィンドウハンドル
 
         Returns:
-            Optional[RECT]: ウィンドウの矩形情報。取得失敗時はNone。
+            (x, y, width, height)のタプル。取得失敗時はNone。
         """
-        rect = RECT()
-        if not self.user32.GetWindowRect(hwnd, byref(rect)):
-            self.logger.error(f"ウィンドウの矩形情報の取得に失敗しました: {hwnd}")
+        try:
+            rect = RECT()
+            if not self.user32.GetWindowRect(hwnd, byref(rect)):
+                self.logger.error("ウィンドウの位置とサイズの取得に失敗しました")
+                return None
+            return (rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top)
+        except Exception as e:
+            self.logger.error(f"ウィンドウの位置とサイズの取得中にエラー: {e}")
             return None
-        return rect
 
-    def capture(self) -> Optional[Image.Image]:
+    def capture(self) -> Optional[ImageArray]:
         """ウィンドウをキャプチャします。
 
         Returns:
-            Optional[Image.Image]: キャプチャしたPIL Imageオブジェクト。失敗時はNone。
+            キャプチャした画像。失敗時はNone。
         """
         try:
             # ウィンドウハンドルを取得
@@ -76,107 +84,93 @@ class WindowCapture:
             if not hwnd:
                 return None
 
-            # ウィンドウの矩形情報を取得
+            # ウィンドウの位置とサイズを取得
             rect = self.get_window_rect(hwnd)
             if not rect:
                 return None
-
-            # ウィンドウの幅と高さを計算
-            width = rect.right - rect.left
-            height = rect.bottom - rect.top
+            x, y, width, height = rect
 
             # ウィンドウのDCを取得
             hwnd_dc = self.user32.GetDC(hwnd)
             if not hwnd_dc:
-                self.logger.error("ウィンドウDCの取得に失敗しました")
+                self.logger.error("ウィンドウのDC取得に失敗しました")
                 return None
 
-            # メモリDCを作成
-            mem_dc = self.gdi32.CreateCompatibleDC(hwnd_dc)
-            if not mem_dc:
-                self.logger.error("メモリDCの作成に失敗しました")
+            # 互換DCを作成
+            mfc_dc = self.gdi32.CreateCompatibleDC(hwnd_dc)
+            if not mfc_dc:
                 self.user32.ReleaseDC(hwnd, hwnd_dc)
+                self.logger.error("互換DC作成に失敗しました")
                 return None
 
             # ビットマップを作成
-            bitmap = self.gdi32.CreateCompatibleBitmap(hwnd_dc, width, height)
-            if not bitmap:
-                self.logger.error("ビットマップの作成に失敗しました")
-                self.gdi32.DeleteDC(mem_dc)
+            save_bit = self.gdi32.CreateCompatibleBitmap(hwnd_dc, width, height)
+            if not save_bit:
+                self.gdi32.DeleteDC(mfc_dc)
                 self.user32.ReleaseDC(hwnd, hwnd_dc)
+                self.logger.error("ビットマップ作成に失敗しました")
                 return None
 
-            # ビットマップをメモリDCに選択
-            self.gdi32.SelectObject(mem_dc, bitmap)
+            # ビットマップを選択
+            self.gdi32.SelectObject(mfc_dc, save_bit)
 
-            # BitBltでウィンドウをキャプチャ
-            if not self.gdi32.BitBlt(
-                mem_dc, 0, 0, width, height, hwnd_dc, 0, 0, 0x00CC0020  # SRCCOPY
-            ):
-                self.logger.error("BitBltの実行に失敗しました")
-                self.gdi32.DeleteObject(bitmap)
-                self.gdi32.DeleteDC(mem_dc)
-                self.user32.ReleaseDC(hwnd, hwnd_dc)
-                return None
+            # 画面をコピー
+            self.gdi32.BitBlt(
+                mfc_dc, 0, 0, width, height, hwnd_dc, 0, 0, 0x00CC0020
+            )  # SRCCOPY
 
             # ビットマップ情報を取得
-            bmp_info = self._get_bitmap_info(bitmap)
+            bmp_info = self._create_bitmap_info(width, height)
             if not bmp_info:
-                self.gdi32.DeleteObject(bitmap)
-                self.gdi32.DeleteDC(mem_dc)
+                self.gdi32.DeleteObject(save_bit)
+                self.gdi32.DeleteDC(mfc_dc)
                 self.user32.ReleaseDC(hwnd, hwnd_dc)
                 return None
 
-            # ピクセルデータを取得
-            buffer = (c_ubyte * (width * height * 4))()  # RGBA
-            if not self.gdi32.GetDIBits(
-                mem_dc, bitmap, 0, height, byref(buffer), bmp_info, 0  # DIB_RGB_COLORS
-            ):
-                self.logger.error("ピクセルデータの取得に失敗しました")
-                self.gdi32.DeleteObject(bitmap)
-                self.gdi32.DeleteDC(mem_dc)
-                self.user32.ReleaseDC(hwnd, hwnd_dc)
-                return None
+            # 画像データを取得
+            image_data = np.zeros((height, width, 4), dtype=np.uint8)
+            self.gdi32.GetDIBits(
+                mfc_dc,
+                save_bit,
+                0,
+                height,
+                image_data.ctypes.data_as(c_void_p),
+                bmp_info,
+                0,
+            )
 
             # リソースを解放
-            self.gdi32.DeleteObject(bitmap)
-            self.gdi32.DeleteDC(mem_dc)
+            self.gdi32.DeleteObject(save_bit)
+            self.gdi32.DeleteDC(mfc_dc)
             self.user32.ReleaseDC(hwnd, hwnd_dc)
 
-            # numpy配列に変換
-            array = np.frombuffer(buffer, dtype=np.uint8)
-            array = array.reshape((height, width, 4))  # RGBA
+            # BGRAからBGRに変換
+            image_data_bgr = cv2.cvtColor(image_data, cv2.COLOR_BGRA2BGR)
 
-            # BGRからRGBに変換
-            array = cv2.cvtColor(array, cv2.COLOR_BGRA2RGB)
-
-            # PIL Imageに変換
-            image = Image.fromarray(array)
-            return image
+            return cast(ImageArray, image_data_bgr)
 
         except Exception as e:
-            self.logger.error(f"キャプチャ中にエラーが発生しました: {e}", exc_info=True)
+            self.logger.error(f"画面キャプチャ中にエラー: {e}")
             return None
 
-    def _get_bitmap_info(self, bitmap: int) -> Optional[object]:
-        """ビットマップ情報を取得します。
+    def _create_bitmap_info(self, width: int, height: int) -> Optional[Any]:
+        """ビットマップ情報構造体を作成します。
 
         Args:
-            bitmap: ビットマップハンドル
+            width: 画像の幅
+            height: 画像の高さ
 
         Returns:
-            Optional[object]: ビットマップ情報オブジェクト。失敗時はNone。
+            ビットマップ情報構造体。作成失敗時はNone。
         """
         try:
-            from ctypes import Structure, c_long, c_ulong
-
             class BITMAPINFOHEADER(Structure):
                 _fields_ = [
                     ("biSize", c_ulong),
                     ("biWidth", c_long),
                     ("biHeight", c_long),
-                    ("biPlanes", c_ulong),
-                    ("biBitCount", c_ulong),
+                    ("biPlanes", c_ushort),
+                    ("biBitCount", c_ushort),
                     ("biCompression", c_ulong),
                     ("biSizeImage", c_ulong),
                     ("biXPelsPerMeter", c_long),
@@ -186,36 +180,18 @@ class WindowCapture:
                 ]
 
             class BITMAPINFO(Structure):
-                _fields_ = [("bmiHeader", BITMAPINFOHEADER), ("bmiColors", c_ulong * 3)]
+                _fields_ = [("bmiHeader", BITMAPINFOHEADER)]
 
-            # BITMAPINFO構造体を初期化
+            # ビットマップ情報を設定
             bmp_info = BITMAPINFO()
-            bmp_header = BITMAPINFOHEADER()
-
-            # ヘッダー情報を設定
-            bmp_header.biSize = 40  # sizeof(BITMAPINFOHEADER)
-            bmp_header.biPlanes = 1
-            bmp_header.biBitCount = 32  # RGBA
-            bmp_header.biCompression = 0  # BI_RGB
-            bmp_info.bmiHeader = bmp_header
-
-            # ビットマップの情報を取得
-            if not self.gdi32.GetDIBits(
-                self.user32.GetDC(0),
-                bitmap,
-                0,
-                0,
-                None,
-                byref(bmp_info),
-                0,  # DIB_RGB_COLORS
-            ):
-                self.logger.error("ビットマップ情報の取得に失敗しました")
-                return None
-
+            bmp_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER)
+            bmp_info.bmiHeader.biWidth = width
+            bmp_info.bmiHeader.biHeight = -height  # トップダウン
+            bmp_info.bmiHeader.biPlanes = 1
+            bmp_info.bmiHeader.biBitCount = 32
+            bmp_info.bmiHeader.biCompression = 0  # BI_RGB
             return bmp_info
 
         except Exception as e:
-            self.logger.error(
-                f"ビットマップ情報の取得中にエラーが発生しました: {e}", exc_info=True
-            )
+            self.logger.error(f"ビットマップ情報構造体の作成中にエラー: {e}")
             return None

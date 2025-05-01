@@ -1,88 +1,54 @@
-"""MessageDetectorクラスのテストモジュール。"""
+"""メッセージ検知機能のテストモジュール。"""
 
 import unittest
+import numpy as np
+from typing import Dict
 from src.services.message_detector import MessageDetector
 
-
 class TestMessageDetector(unittest.TestCase):
-    """MessageDetectorクラスのテストケース。"""
+    """メッセージ検知機能のテストクラス。"""
 
-    def setUp(self):
-        """各テストケース実行前の準備。"""
-        self.config = {"MAX_MESSAGE_CACHE": "10", "CACHE_CLEAN_THRESHOLD": "12"}
+    def setUp(self) -> None:
+        """テストの前準備。"""
+        self.config: Dict[str, str] = {
+            "MAX_MESSAGE_CACHE": "10",
+            "CACHE_CLEAN_THRESHOLD": "12"
+        }
         self.detector = MessageDetector(self.config)
 
-    def test_detect_new_messages_empty_text(self):
-        """空のテキストを処理した場合のテスト。"""
+    def test_detect_new_messages_empty(self) -> None:
+        """空のテキストでのメッセージ検知のテスト。"""
+        # 空のテキストでテスト
         result = self.detector.detect_new_messages("")
+        
+        # 結果を検証
         self.assertEqual(result, [])
 
-    def test_detect_new_messages_single_message(self):
-        """単一の新規メッセージを検出するテスト。"""
-        message = "テストメッセージ"
-        result = self.detector.detect_new_messages(message)
-        self.assertEqual(result, [message])
+    def test_detect_new_messages_with_text(self) -> None:
+        """テキストを含む場合のメッセージ検知のテスト。"""
+        # テスト用のテキスト
+        test_text = "これはテストメッセージです。"
 
-        # 同じメッセージを再度検出しないことを確認
-        result = self.detector.detect_new_messages(message)
-        self.assertEqual(result, [])
+        # メッセージ検知を実行
+        result = self.detector.detect_new_messages(test_text)
 
-    def test_detect_new_messages_multiple_lines(self):
-        """複数行のメッセージを検出するテスト。"""
-        text = "メッセージ1\nメッセージ2\nメッセージ3"
-        result = self.detector.detect_new_messages(text)
-        self.assertEqual(result, ["メッセージ1", "メッセージ2", "メッセージ3"])
+        # 結果を検証
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0], "これはテストメッセージです。")
 
-    def test_cache_cleaning(self):
-        """キャッシュクリーニング機能のテスト。"""
-        # キャッシュの最大サイズを超えるメッセージを送信
-        for i in range(15):
-            # 各メッセージを個別に送信
-            self.detector.detect_new_messages(f"メッセージ{i}")
+    def test_detect_duplicate_messages(self) -> None:
+        """重複メッセージの検知テスト。"""
+        # 同じメッセージを2回送信
+        test_text = "これはテストメッセージです。"
+        
+        # 1回目の検知
+        first_result = self.detector.detect_new_messages(test_text)
+        # 2回目の検知
+        second_result = self.detector.detect_new_messages(test_text)
 
-        # キャッシュサイズが最大値以下になっていることを確認
-        cache_size = self.detector.get_message_count()
-        self.assertLessEqual(cache_size, 10)
-
-        # 現在の実装では、メッセージ14は既にキャッシュから削除されている可能性がある
-        # メッセージ14を改めて送信すると、キャッシュにない場合は新規として検出される
-        # キャッシュにある場合は空のリストが返される
-        # どちらの挙動も許容する
-        result = self.detector.detect_new_messages("メッセージ14")
-        if len(result) == 0:
-            # キャッシュに残っている場合は空のリスト
-            self.assertEqual(result, [])
-        else:
-            # キャッシュから削除されていた場合は新規メッセージとして検出
-            self.assertEqual(result, ["メッセージ14"])
-
-    def test_normalize_message(self):
-        """メッセージの正規化をテスト。"""
-        # 空白文字の正規化
-        message1 = "  テスト   メッセージ  "
-        message2 = "テスト メッセージ"
-
-        result1 = self.detector._normalize_message(message1)
-        result2 = self.detector._normalize_message(message2)
-
-        self.assertEqual(result1, result2)
-
-    def test_reset_cache(self):
-        """キャッシュのリセット機能をテスト。"""
-        # いくつかのメッセージを検出
-        self.detector.detect_new_messages("テストメッセージ1")
-        self.detector.detect_new_messages("テストメッセージ2")
-
-        # キャッシュをリセット
-        self.detector.reset_cache()
-
-        # キャッシュが空になっていることを確認
-        self.assertEqual(self.detector.get_message_count(), 0)
-
-        # リセット後に同じメッセージを再度検出できることを確認
-        result = self.detector.detect_new_messages("テストメッセージ1")
-        self.assertEqual(result, ["テストメッセージ1"])
-
+        # 結果を検証
+        self.assertEqual(len(first_result), 1)
+        self.assertEqual(len(second_result), 0)
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,175 +1,128 @@
-"""
-ウィンドウの画面差異検知メインアプリケーション
+"""アプリケーションのメインモジュール。
+
+アプリケーションのメインループと初期化処理を提供します。
 """
 
-import os
-import sys
-import signal
-import time
 import logging
-import winsound
-from typing import Dict, Any, Optional, List, Set, Tuple, Callable
 import threading
-
-import cv2
+import time
+import argparse
+from typing import Optional, Dict, Any, List, Tuple, cast
+from PIL import Image
 import numpy as np
-
+from numpy.typing import NDArray
 from src.services.window_capture import WindowCapture
 from src.services.difference_detector import DifferenceDetector
-from src.services.memory_watcher import MemoryWatcher
-from src.utils.config import Config
+from src.utils.config import Config, get_config
 from src.utils.logging_config import setup_logging
 
-# グローバル変数
-config: Config = None
-difference_detector: Optional[DifferenceDetector] = None
-window_capture: WindowCapture = None
-memory_watcher: Optional[MemoryWatcher] = None
-running: bool = True
+# 画像処理関連の型定義
+ImageArray = NDArray[np.uint8]
 
-
-def signal_handler(sig: int, frame: Any) -> None:
-    """シグナルハンドラ関数。プログラムの終了を処理します。
-
-    Args:
-        sig: シグナル番号
-        frame: 現在のスタックフレーム
-    """
-    global running
-    logger = logging.getLogger()
-    logger.info("終了シグナルを受信しました。アプリケーションを終了します...")
-
-    # 終了フラグを設定
-    running = False
-
-    # 差異検出サービスの終了処理
-    logger.info("差異検出サービスを終了しています...")
-    if difference_detector:
-        difference_detector.shutdown()
-
-
-def run_main_loop(running_flag: Callable[[], bool]) -> None:
-    """
-    画面差異検知メインループを外部から制御可能な関数として実行します。
+def run_main_loop(
+    running: threading.Event,
+    roi: Optional[List[int]] = None,
+    callback: Optional[Any] = None,
+) -> None:
+    """メインループを実行する。
 
     Args:
-        running_flag: ループ継続判定用のコール可能オブジェクト（例: lambda: True/False）
+        running: 実行状態を制御するイベント
+        roi: 関心領域の座標 [x1, y1, x2, y2]
+        callback: コールバック関数
     """
-    global config, difference_detector, window_capture, memory_watcher
-    setup_logging()
-    logger = logging.getLogger()
-    logger.info("メインループを開始します (GUI制御)")
-    config = Config()
-    window_capture = WindowCapture(config.get("TARGET_WINDOW_TITLE", "LDPlayer"))
-    difference_detector = DifferenceDetector(config)
-
-    if config.get("MEMORY_WATCHER_ENABLED", "false").lower() == "true":
-        memory_watcher = MemoryWatcher(config)
-        memory_watcher.start()
-        logger.info("メモリ監視を開始しました")
-
-    capture_interval = float(config.get("CAPTURE_INTERVAL", "1.0"))
-    notification_sound = config.get("NOTIFICATION_SOUND", "true").lower() == "true"
+    logger = logging.getLogger(__name__)
+    config = get_config()
 
     try:
-        while running_flag():
-            loop_start_time = time.time()
-            try:
-                # 差異検出サービスが終了中なら待機
-                if (
-                    difference_detector
-                    and difference_detector.is_shutting_down.is_set()
-                ):
-                    time.sleep(0.1)
-                    continue
+        # ウィンドウキャプチャの初期化
+        window_name = config.window_title or "LDPlayer"
+        window_capture = WindowCapture(window_name)
 
+        # 差分検知器の初期化
+        detector = DifferenceDetector(
+            threshold=config.diff_threshold,
+            ocr_enabled=config.ocr_enabled,
+            ocr_language=config.ocr_language,
+            ocr_threshold=config.ocr_threshold
+        )
+
+        # メインループ
+        while running.is_set():
+            try:
+                # 画面キャプチャ
                 frame = window_capture.capture()
                 if frame is None:
-                    logger.warning(
-                        "ウィンドウのキャプチャに失敗しました。次のフレームを試みます..."
-                    )
-                    time.sleep(capture_interval)
+                    logger.warning("キャプチャに失敗しました")
+                    time.sleep(0.2)
                     continue
 
-                # 差異検出サービスが終了中なら待機
-                if (
-                    difference_detector
-                    and difference_detector.is_shutting_down.is_set()
-                ):
-                    continue
+                # ROIでクロップ
+                if roi is not None:
+                    x1, y1, x2, y2 = [int(round(v)) for v in roi]
+                    x1 = max(0, min(x1, frame.shape[1] - 1))
+                    y1 = max(0, min(y1, frame.shape[0] - 1))
+                    x2 = max(0, min(x2, frame.shape[1]))
+                    y2 = max(0, min(y2, frame.shape[0]))
+                    if x2 > x1 and y2 > y1:
+                        frame = frame[y1:y2, x1:x2]
 
-                # 画像の差異を検出
-                if (
-                    difference_detector
-                    and not difference_detector.is_shutting_down.is_set()
-                ):
-                    has_difference, debug_image, diff_score = (
-                        difference_detector.compare_frames(frame)
-                    )
+                # 差分検知
+                has_diff = detector.detect_difference(frame)
 
-                    # 差異検出サービスが終了中なら待機
-                    if difference_detector.is_shutting_down.is_set():
-                        continue
+                # コールバックがあれば実行
+                if callback is not None:
+                    callback(has_diff)
 
-                    # 差異がある場合は通知
-                    if has_difference:
-                        logger.info(
-                            f"画面の変化を検知しました: スコア {diff_score:.4f}"
-                        )
+                # キャプチャ間隔
+                capture_interval = config.capture_interval
+                time.sleep(capture_interval)
 
-                        # 通知音を鳴らす
-                        if notification_sound:
-                            try:
-                                # ビープ音で通知
-                                beep_frequency = int(
-                                    config.get("NOTIFICATION_BEEP_FREQUENCY", "1000")
-                                )  # デフォルト 1000Hz
-                                beep_duration = int(
-                                    config.get("NOTIFICATION_BEEP_DURATION", "200")
-                                )  # デフォルト 200ミリ秒
-                                winsound.Beep(beep_frequency, beep_duration)
-                            except Exception as e:
-                                logger.error(
-                                    f"通知音の再生中にエラーが発生しました: {e}",
-                                    exc_info=True,
-                                )
-
-                elapsed_time = time.time() - loop_start_time
-                if (
-                    elapsed_time < capture_interval
-                    and running_flag()
-                    and (
-                        not difference_detector
-                        or not difference_detector.is_shutting_down.is_set()
-                    )
-                ):
-                    time.sleep(capture_interval - elapsed_time)
             except Exception as e:
-                if running_flag() and (
-                    not difference_detector
-                    or not difference_detector.is_shutting_down.is_set()
-                ):
-                    logger.error(
-                        f"メインループでエラーが発生しました: {e}", exc_info=True
-                    )
-                    time.sleep(1)
-                else:
-                    logger.debug(f"終了処理中にエラーが発生しました: {e}")
-                    time.sleep(0.1)
-        logger.info("メインループを終了しました (GUI制御)")
+                logger.error(f"メインループでエラー: {e}", exc_info=True)
+                time.sleep(0.2)
+
     except Exception as e:
-        logger.error(f"メインループ実行中にエラーが発生しました: {e}", exc_info=True)
+        logger.error(f"メインループの初期化でエラー: {e}", exc_info=True)
+
     finally:
-        if difference_detector:
-            difference_detector.is_shutting_down.set()
-            try:
-                difference_detector.shutdown()
-                logger.info("差異検出サービスの終了処理が完了しました")
-            except Exception as e:
-                logger.error(f"差異検出サービスの終了処理中にエラーが発生しました: {e}")
-        if memory_watcher:
-            try:
-                memory_watcher.stop()
-                logger.info("メモリ監視を停止しました")
-            except Exception as e:
-                logger.error(f"メモリウォッチャーの停止中にエラーが発生しました: {e}")
+        # 終了処理
+        if detector is not None:
+            detector.shutdown()
+        logger.info("メインループを終了しました")
+
+def main() -> None:
+    """アプリケーションのエントリーポイント。"""
+    # ロギングの設定
+    setup_logging()
+    
+    # コマンドライン引数の解析
+    parser = argparse.ArgumentParser(description="Window Capture Reading")
+    parser.add_argument(
+        "--window-title", "-w", 
+        help="キャプチャ対象のウィンドウタイトル", 
+        default=None
+    )
+    parser.add_argument(
+        "--no-gui", "-n", 
+        help="GUIを使用せずにコマンドラインモードで実行",
+        action="store_true"
+    )
+    args = parser.parse_args()
+    
+    if args.no_gui:
+        # コマンドラインモード
+        event = threading.Event()
+        event.set()
+        try:
+            run_main_loop(event)
+        except KeyboardInterrupt:
+            logging.info("Ctrl+Cが押されました。終了します...")
+            event.clear()
+    else:
+        # GUIモード
+        from src.gui import start_gui
+        start_gui(args.window_title)
+
+if __name__ == "__main__":
+    main()
