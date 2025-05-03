@@ -83,5 +83,4 @@ jobs:
     with:
       tag_name: ${{ needs.create-tag.outputs.tag_name }}
       is_prerelease: ${{ needs.create-tag.outputs.is_prerelease }}
-      skip_checks: true # 既にチェックは実行済みなのでスキップ
     secrets: inherit 

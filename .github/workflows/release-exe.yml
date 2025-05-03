@@ -16,11 +16,6 @@ on:
         required: false
         type: boolean
         default: false
-      skip_checks:
-        description: 'コード品質チェックとテストをスキップするかどうか'
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   build-and-release:
