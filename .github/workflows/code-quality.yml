@@ -1,4 +1,4 @@
-name: CI/CD
+name: Code Quality Check
 
 on:
   workflow_call:  # 他のワークフローからの呼び出しを許可
@@ -35,7 +35,9 @@ jobs:
       run: pytest --cov=src tests/ --cov-report=xml
       
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v3
       with:
         file: ./coverage.xml
         fail_ci_if_error: true
+      env:
+        PYTHONIOENCODING: utf-8
