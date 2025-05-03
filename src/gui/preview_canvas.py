@@ -20,11 +20,11 @@ class PreviewCanvas(tk.Frame):
             parent: 親ウィジェット
         """
         super().__init__(parent)
-        
+
         # キャンバスの作成
         self.canvas = tk.Canvas(self, bg="black")
         self.canvas.grid(row=0, column=0, sticky="nsew")
-        
+
         # フレームの行と列の設定
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)

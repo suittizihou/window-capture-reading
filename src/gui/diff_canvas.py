@@ -46,7 +46,9 @@ class DiffCanvas(tk.Canvas):
         self.zoom_scale.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
 
         # リセットボタン
-        self.reset_button = ttk.Button(self.control_frame, text="リセット", command=self.reset_view)
+        self.reset_button = ttk.Button(
+            self.control_frame, text="リセット", command=self.reset_view
+        )
         self.reset_button.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
 
         # パン関連の変数
@@ -92,23 +94,23 @@ class DiffCanvas(tk.Canvas):
             # キャンバスのサイズに合わせて画像をリサイズ
             canvas_width = self.winfo_width()
             canvas_height = self.winfo_height()
-            
+
             if canvas_width > 1 and canvas_height > 1:  # 有効なサイズの場合のみ処理
                 # アスペクト比を保持してリサイズ
                 img_width, img_height = image.size
                 scale = min(canvas_width / img_width, canvas_height / img_height)
                 new_width = int(img_width * scale)
                 new_height = int(img_height * scale)
-                
+
                 resized_image = image.resize((new_width, new_height), Image.LANCZOS)
-                
+
                 # PhotoImageを作成して保持（ガベージコレクション対策）
                 self.photo_image = ImageTk.PhotoImage(resized_image)
-                
+
                 # 既存の画像を削除
                 if self.image_on_canvas is not None:
                     self.delete(self.image_on_canvas)
-                
+
                 # 画像を中央に配置
                 x = (canvas_width - new_width) // 2
                 y = (canvas_height - new_height) // 2

@@ -75,15 +75,19 @@ class DifferenceDetector:
             if self.diff_method.lower() == "ssim":
                 return self._detect_with_ssim(prev_image, current_image, gray1, gray2)
             else:
-                return self._detect_with_absdiff(prev_image, current_image, gray1, gray2)
-                
+                return self._detect_with_absdiff(
+                    prev_image, current_image, gray1, gray2
+                )
+
         except Exception as e:
             self.logger.error(f"差分検出エラー: {e}", exc_info=True)
             # エラーの場合は差分なしとする
             empty_image = np.zeros_like(current_image)
             return DiffResult(has_difference=False, diff_image=empty_image, score=1.0)
 
-    def _detect_with_ssim(self, img1: ImageArray, img2: ImageArray, gray1: ImageArray, gray2: ImageArray) -> DiffResult:
+    def _detect_with_ssim(
+        self, img1: ImageArray, img2: ImageArray, gray1: ImageArray, gray2: ImageArray
+    ) -> DiffResult:
         """SSIMによる差分検出。
 
         Args:
@@ -100,28 +104,30 @@ class DifferenceDetector:
             ssim_score, diff = structural_similarity(
                 gray1, gray2, full=True, data_range=255
             )
-            
+
             # スコアを保存
             score = ssim_score
-            
+
             # 閾値判定
             has_diff = score < (1.0 - self.threshold)
-            
+
             # 差分画像を生成
             diff_image = self._create_diff_with_ssim(img1, img2, gray1, gray2, diff)
-            
+
             return DiffResult(
                 has_difference=has_diff,
                 diff_image=diff_image,
                 score=score,
             )
-            
+
         except Exception as e:
             self.logger.error(f"SSIM差分検出中にエラー: {e}", exc_info=True)
             # エラーの場合は絶対差分法を使用
             return self._detect_with_absdiff(img1, img2, gray1, gray2)
 
-    def _detect_with_absdiff(self, img1: ImageArray, img2: ImageArray, gray1: ImageArray, gray2: ImageArray) -> DiffResult:
+    def _detect_with_absdiff(
+        self, img1: ImageArray, img2: ImageArray, gray1: ImageArray, gray2: ImageArray
+    ) -> DiffResult:
         """絶対差分による差分検出。
 
         Args:
@@ -137,16 +143,16 @@ class DifferenceDetector:
         diff = cv2.absdiff(gray1, gray2)
         total_pixels = diff.size
         diff_pixels = np.count_nonzero(diff > int(self.threshold * 255))
-        
+
         # スコアを計算（1.0に近いほど一致）
         score = 1.0 - (diff_pixels / total_pixels)
-        
+
         # 閾値判定（一定数以上のピクセルが異なれば差分あり）
         has_diff = diff_pixels > 100
-        
+
         # 差分画像を生成
         diff_image = self._create_diff_with_absdiff(img1, img2, gray1, gray2)
-        
+
         return DiffResult(
             has_difference=has_diff,
             diff_image=diff_image,
@@ -169,9 +175,11 @@ class DifferenceDetector:
         """
         # 絶対差分を計算
         diff = cv2.absdiff(gray1, gray2)
-        
+
         # 閾値処理
-        _, thresh = cv2.threshold(diff, int(self.threshold * 255), 255, cv2.THRESH_BINARY)
+        _, thresh = cv2.threshold(
+            diff, int(self.threshold * 255), 255, cv2.THRESH_BINARY
+        )
 
         # 膨張処理（差分部分を強調）
         kernel = np.ones((5, 5), np.uint8)
@@ -182,7 +190,7 @@ class DifferenceDetector:
 
         # マスクを3チャンネルに変換してカラー画像にする
         mask_3ch = cv2.cvtColor(dilated, cv2.COLOR_GRAY2BGR)
-        
+
         # 赤色でマスク（鮮明な赤色にする）
         red_mask = np.zeros_like(mask_3ch)
         red_mask[:, :, 2] = mask_3ch[:, :, 0]  # 赤チャンネルにマスクを適用
@@ -192,13 +200,22 @@ class DifferenceDetector:
         result = cv2.addWeighted(result, 1.0, red_mask, alpha, 0)
 
         # 差分部分に輪郭線を追加（オプション）
-        contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        cv2.drawContours(result, contours, -1, (0, 0, 255), 2)  # 太さ2で輪郭を赤色で描画
+        contours, _ = cv2.findContours(
+            dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+        cv2.drawContours(
+            result, contours, -1, (0, 0, 255), 2
+        )  # 太さ2で輪郭を赤色で描画
 
         return result
 
     def _create_diff_with_ssim(
-        self, img1: ImageArray, img2: ImageArray, gray1: ImageArray, gray2: ImageArray, diff: NDArray[np.float64]
+        self,
+        img1: ImageArray,
+        img2: ImageArray,
+        gray1: ImageArray,
+        gray2: ImageArray,
+        diff: NDArray[np.float64],
     ) -> ImageArray:
         """SSIMによる差分画像の生成。
 
@@ -217,14 +234,18 @@ class DifferenceDetector:
         diff_map = diff_map.astype(np.uint8)
 
         # 閾値処理（敏感にするために低めの値を使用）
-        _, thresh = cv2.threshold(diff_map, int(self.threshold * 200), 255, cv2.THRESH_BINARY)
+        _, thresh = cv2.threshold(
+            diff_map, int(self.threshold * 200), 255, cv2.THRESH_BINARY
+        )
 
         # 膨張処理で少しノイズを除去し、差分部分を強調
         kernel = np.ones((3, 3), np.uint8)
         thresh = cv2.dilate(thresh, kernel, iterations=1)
-        
+
         # 輪郭検出
-        contours, _ = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(
+            thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
 
         # 結果画像を作成
         result = img2.copy()
@@ -233,13 +254,13 @@ class DifferenceDetector:
         # まず、マスクを作成
         mask = np.zeros_like(thresh)
         cv2.drawContours(mask, contours, -1, 255, -1)  # 輪郭の内側を塗りつぶし
-        
+
         # 膨張処理で差分部分を強調
         mask = cv2.dilate(mask, kernel, iterations=2)
 
         # マスクを3チャンネルに変換
         mask_3ch = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
-        
+
         # 赤色のマスクを作成
         red_mask = np.zeros_like(mask_3ch)
         red_mask[:, :, 2] = mask_3ch[:, :, 0]  # 赤チャンネルにマスクを適用
@@ -252,7 +273,9 @@ class DifferenceDetector:
         for c in contours:
             if cv2.contourArea(c) > 50:  # 小さな差分も検出
                 (x, y, w, h) = cv2.boundingRect(c)
-                cv2.rectangle(result, (x, y), (x + w, y + h), (0, 0, 255), 2)  # 太さ2で赤色の枠
+                cv2.rectangle(
+                    result, (x, y), (x + w, y + h), (0, 0, 255), 2
+                )  # 太さ2で赤色の枠
 
         return result
 

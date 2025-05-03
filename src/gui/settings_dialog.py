@@ -214,22 +214,22 @@ class SettingsDialog:
                 entry = ttk.Entry(frame, width=10)
                 entry.grid(row=0, column=1, sticky="e")
                 entry.insert(0, str(current_value))
-                
+
                 def validate_float(action: str, value: str) -> bool:
-                    if action == '1':  # 挿入時
+                    if action == "1":  # 挿入時
                         try:
                             if value == "":
                                 return True
                             float_val = float(value)
                             min_val = float(setting.get("min", 0.0))
-                            max_val = float(setting.get("max", float('inf')))
+                            max_val = float(setting.get("max", float("inf")))
                             return min_val <= float_val <= max_val
                         except ValueError:
                             return False
                     return True
-                
-                vcmd = (frame.register(validate_float), '%d', '%P')
-                entry.configure(validate='key', validatecommand=vcmd)
+
+                vcmd = (frame.register(validate_float), "%d", "%P")
+                entry.configure(validate="key", validatecommand=vcmd)
                 self.double_vars[key] = dbl_var
 
             elif setting["type"] == "float":
