@@ -444,7 +444,7 @@ class MainWindow:
         """バージョン情報を表示します。"""
         messagebox.showinfo(
             "バージョン情報",
-            "Window Capture Reading\nVersion 1.0.0\n\n"
+            "Window Capture Reading\nVersion 2.1.0\n\n"
             "ウィンドウをキャプチャして変化を検出するツールです。",
         )
 
