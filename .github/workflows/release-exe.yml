@@ -24,6 +24,16 @@ jobs:
       - name: チェックアウト
         uses: actions/checkout@v4
 
+      - name: タグ情報の取得
+        id: tag_info
+        run: |
+          $tag = "${{ github.ref_name }}"
+          echo "tag_name=$tag" >> $env:GITHUB_OUTPUT
+          
+          # プレリリースかどうかを判定（セマンティックバージョニングで「-」があるものはプレリリース）
+          $isPrerelease = $tag -match "-"
+          echo "is_prerelease=$isPrerelease" >> $env:GITHUB_OUTPUT
+          
       - name: Pythonセットアップ
         uses: actions/setup-python@v5
         with:
@@ -45,7 +55,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.tag_info.outputs.is_prerelease == 'True' }}
           files: dist/WindowCaptureReading.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
