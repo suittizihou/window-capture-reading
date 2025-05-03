@@ -50,7 +50,7 @@ class MainWindow:
 
         # ロガーのセットアップ
         setup_logging()
-        self.logger = logging.getLogger(__name__)
+        self.logger: logging.Logger = logging.getLogger(__name__)
 
         # ウィンドウの設定
         self.root = tk.Tk()
@@ -142,7 +142,7 @@ class MainWindow:
         """メニューバーを作成します。"""
         # 既存のメニューバーをクリア（念のため）
         if hasattr(self.root, "config") and callable(self.root.config):
-            self.root.config(menu=None)
+            self.root.config(menu=None)  # type: ignore  # tkinterの型定義の問題
 
         # 新しいメニューバーを作成
         menubar = tk.Menu(self.root)
@@ -484,43 +484,6 @@ class MainWindow:
         self._update_ui_state()
         self.logger.info(f"キャプチャを開始しました: {window_title}")
 
-        # 短い間隔でウィンドウサイズをチェックして復元
-        self.root.after(10, self._check_and_restore_window_size)
-
-    def _check_and_restore_window_size(self) -> None:
-        """ウィンドウサイズをチェックして必要に応じて復元します。"""
-        if not hasattr(self, "keep_window_size") or not self.keep_window_size:
-            return
-
-        current_width = self.root.winfo_width()
-        current_height = self.root.winfo_height()
-        current_x = self.root.winfo_x()
-        current_y = self.root.winfo_y()
-
-        if hasattr(self, "target_width") and hasattr(self, "target_height"):
-            # サイズと位置の変更を検出
-            size_changed = (
-                abs(current_width - self.target_width) > 2
-                or abs(current_height - self.target_height) > 2
-            )
-            position_changed = (
-                abs(current_x - self.target_x) > 2 or abs(current_y - self.target_y) > 2
-            )
-
-            if size_changed or position_changed:
-                self.logger.debug(
-                    f"ウィンドウを復元: 現在={current_width}x{current_height}@{current_x},{current_y} "
-                    f"目標={self.target_width}x{self.target_height}@{self.target_x},{self.target_y}"
-                )
-                # サイズと位置を強制的に復元（メニューバーの高さは既に含まれている）
-                self.root.geometry(
-                    f"{self.target_width}x{self.target_height}+{self.target_x}+{self.target_y}"
-                )
-                self.root.update_idletasks()
-
-        # キャプチャ実行中は頻繁にチェック
-        self.root.after(50, self._check_and_restore_window_size)
-
     def on_stop(self) -> None:
         """キャプチャを停止します。"""
         # 現在のウィンドウサイズを取得
@@ -715,14 +678,14 @@ class MainWindow:
                         # ラムダで変数をキャプチャして使用
                         diff_img_copy = diff_img.copy()  # 念のためコピーを作成
                         self.root.after(
-                            0, lambda img=diff_img_copy: self._update_diff_view(img)
+                            0, lambda img=diff_img_copy: self._update_diff_view(img)  # type: ignore
                         )
 
                         # 差分スコア表示を更新
                         score = diff_result.score
                         self.root.after(
                             0,
-                            lambda s=score, h=diff_result.has_difference: self._update_diff_score(
+                            lambda s=score, h=diff_result.has_difference: self._update_diff_score(  # type: ignore
                                 s, h
                             ),
                         )

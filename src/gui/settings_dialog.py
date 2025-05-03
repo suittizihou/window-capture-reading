@@ -70,10 +70,10 @@ class SettingsDialog:
         self.center_dialog()
 
         # 値の入力ウィジェットをキーとして保持
-        self.bool_vars: Dict[str, tk.BooleanVar] = {}
-        self.string_vars: Dict[str, tk.StringVar] = {}
-        self.double_vars: Dict[str, tk.DoubleVar] = {}
-        self.int_vars: Dict[str, tk.IntVar] = {}
+        self.bool_vars: Dict[str, tk.Variable] = {}  # BooleanVarを含む汎用型
+        self.string_vars: Dict[str, tk.Variable] = {}  # StringVarを含む汎用型
+        self.double_vars: Dict[str, tk.Variable] = {}  # DoubleVarを含む汎用型
+        self.int_vars: Dict[str, tk.Variable] = {}  # IntVarを含む汎用型
 
         # タブコントロールの作成
         self.notebook = ttk.Notebook(self.dialog)
@@ -209,11 +209,9 @@ class SettingsDialog:
                 self.string_vars[key] = str_var
 
             elif setting["type"] == "float_entry":
-                # 数値入力フィールド用の特別な処理
                 dbl_var = tk.DoubleVar(value=float(current_value))
-                entry = ttk.Entry(frame, width=10)
+                entry = ttk.Entry(frame, width=10, textvariable=dbl_var)
                 entry.grid(row=0, column=1, sticky="e")
-                entry.insert(0, str(current_value))
 
                 def validate_float(action: str, value: str) -> bool:
                     if action == "1":  # 挿入時
@@ -251,14 +249,12 @@ class SettingsDialog:
                     )
                     scale.grid(row=0, column=1, sticky="e")
 
-                    # スライダー変更時のコールバック（ラベル更新用）
                     def on_float_slider_change(
                         event: tk.Event, lbl: ttk.Label, var: tk.DoubleVar
                     ) -> None:
                         value = var.get()
                         lbl.config(text=f"{value:.1f}%")
 
-                    # lambda型を明示するために関数定義で包む
                     def make_float_slider_callback(
                         lbl: ttk.Label, var: tk.DoubleVar
                     ) -> Callable[[tk.Event], None]:
@@ -276,21 +272,25 @@ class SettingsDialog:
     def on_save(self) -> None:
         """設定を保存します。"""
         # 各設定値を取得して保存
+        # BooleanVarのみ
         for key, var in self.bool_vars.items():
-            setattr(self.config, key, var.get())
+            setattr(self.config, key, bool(var.get()))
 
+        # StringVarのみ
         for key, var in self.string_vars.items():
-            setattr(self.config, key, var.get())
+            setattr(self.config, key, str(var.get()))
 
+        # DoubleVarのみ
         for key, var in self.double_vars.items():
-            value = var.get()
+            value = float(var.get())
             # 差分検出閾値の場合は、パーセント（0-100）から内部値（0-1）に変換
             if key == "diff_threshold":
                 value = value / 100.0
             setattr(self.config, key, value)
 
+        # IntVarのみ
         for key, var in self.int_vars.items():
-            setattr(self.config, key, var.get())
+            setattr(self.config, key, int(var.get()))
 
         # 保存コールバックを呼び出し
         if self.on_save_callback:

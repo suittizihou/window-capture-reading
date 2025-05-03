@@ -16,7 +16,8 @@ from skimage.metrics import structural_similarity
 from src.utils.config import Config
 
 # 画像処理関連の型定義
-ImageArray = NDArray[np.uint8]
+# OpenCVの画像型として、複数の型が許容されるようUnion型で定義
+ImageArray = Union[NDArray[np.uint8], NDArray[Any]]
 
 
 class DiffResult(NamedTuple):
@@ -70,6 +71,10 @@ class DifferenceDetector:
             # グレースケールに変換
             gray1 = cv2.cvtColor(prev_image, cv2.COLOR_BGR2GRAY)
             gray2 = cv2.cvtColor(current_image, cv2.COLOR_BGR2GRAY)
+
+            # グレースケール画像を正しい型にキャスト
+            gray1 = cast(ImageArray, gray1)
+            gray2 = cast(ImageArray, gray2)
 
             # 検出方法に応じて処理を分岐
             if self.diff_method.lower() == "ssim":
@@ -184,28 +189,42 @@ class DifferenceDetector:
         # 膨張処理（差分部分を強調）
         kernel = np.ones((5, 5), np.uint8)
         dilated = cv2.dilate(thresh, kernel, iterations=2)  # iterations=2でより強調
+        dilated = cast(ImageArray, dilated)  # 型をキャスト
 
-        # 差分画像の作成
+        # 差分画像の作成（常にuint8型を維持）
         result = img2.copy()
 
         # マスクを3チャンネルに変換してカラー画像にする
         mask_3ch = cv2.cvtColor(dilated, cv2.COLOR_GRAY2BGR)
+        mask_3ch = cast(ImageArray, mask_3ch)  # 型をキャスト
 
         # 赤色でマスク（鮮明な赤色にする）
         red_mask = np.zeros_like(mask_3ch)
         red_mask[:, :, 2] = mask_3ch[:, :, 0]  # 赤チャンネルにマスクを適用
+        red_mask = cast(ImageArray, red_mask)  # 型をキャスト
 
         # 元画像と差分マスクを合成（透明度高め）
         alpha = 0.8  # 値を大きくすると赤色が鮮明になる
         result = cv2.addWeighted(result, 1.0, red_mask, alpha, 0)
+        result = cast(ImageArray, result)  # 型をキャスト
 
-        # 差分部分に輪郭線を追加（オプション）
+        # 差分部分に輪郭線を追加（個別に処理して型を整合させる）
         contours, _ = cv2.findContours(
             dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
-        cv2.drawContours(
-            result, contours, -1, (0, 0, 255), 2
-        )  # 太さ2で輪郭を赤色で描画
+        
+        # 各輪郭を個別に描画（型の問題を回避）
+        for c in contours:
+            # タプルでなくリストを使用し、色指定を明示的にfloat型に
+            color = [0.0, 0.0, 255.0]  # 赤色
+            # シーケンスの色と他の引数で正しく呼び出し
+            cv2.drawContours(
+                result,  # 描画先の画像
+                [c],     # 輪郭のリスト
+                0,       # 描画する輪郭のインデックス（0=すべて）
+                color,   # 色（BGR）
+                2        # 線の太さ
+            )  # type: ignore  # OpenCVの型定義の問題を無視
 
         return result
 
@@ -231,6 +250,7 @@ class DifferenceDetector:
         """
         # SSIM差分マップを[0, 1]から[0, 255]に変換
         diff_map = (1 - diff) * 255
+        # numpy float64から明示的にuint8へキャスト
         diff_map = diff_map.astype(np.uint8)
 
         # 閾値処理（敏感にするために低めの値を使用）
@@ -247,34 +267,49 @@ class DifferenceDetector:
             thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
 
-        # 結果画像を作成
+        # 結果画像を作成（常にuint8型を維持）
         result = img2.copy()
 
         # 差分部分にマスクと輪郭線を描画
         # まず、マスクを作成
         mask = np.zeros_like(thresh)
-        cv2.drawContours(mask, contours, -1, 255, -1)  # 輪郭の内側を塗りつぶし
+        
+        # 各輪郭を個別に塗りつぶし（型の問題を回避）
+        for c in contours:
+            # 輪郭内部を塗りつぶす (255は白色)
+            cv2.drawContours(
+                mask,   # 描画先の画像
+                [c],    # 輪郭のリスト
+                0,      # 描画する輪郭のインデックス（0=すべて）
+                255,    # 色（グレースケールなので整数値）
+                -1      # -1は内部塗りつぶし
+            )  # type: ignore  # OpenCVの型定義の問題を無視
 
         # 膨張処理で差分部分を強調
         mask = cv2.dilate(mask, kernel, iterations=2)
+        mask = cast(ImageArray, mask)
 
         # マスクを3チャンネルに変換
         mask_3ch = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+        mask_3ch = cast(ImageArray, mask_3ch)
 
         # 赤色のマスクを作成
         red_mask = np.zeros_like(mask_3ch)
         red_mask[:, :, 2] = mask_3ch[:, :, 0]  # 赤チャンネルにマスクを適用
+        red_mask = cast(ImageArray, red_mask)
 
         # 元画像と差分マスクを合成（透明度を大きめに）
         alpha = 0.8  # 値を大きくすると赤色が鮮明になる
         result = cv2.addWeighted(result, 1.0, red_mask, alpha, 0)
+        result = cast(ImageArray, result)
 
         # 各輪郭について矩形で囲む（輪郭が小さすぎる場合は無視）
         for c in contours:
             if cv2.contourArea(c) > 50:  # 小さな差分も検出
                 (x, y, w, h) = cv2.boundingRect(c)
+                # 色指定を正確なシーケンス型で
                 cv2.rectangle(
-                    result, (x, y), (x + w, y + h), (0, 0, 255), 2
+                    result, (x, y), (x + w, y + h), [0.0, 0.0, 255.0], 2
                 )  # 太さ2で赤色の枠
 
         return result
