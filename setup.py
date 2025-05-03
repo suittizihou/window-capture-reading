@@ -7,12 +7,11 @@ setup(
     install_requires=[
         "opencv-python",
         "numpy",
-        "pytesseract",
         "Pillow",
     ],
     python_requires=">=3.11",
     author="suittizihou",
-    description="ウィンドウキャプチャとテキスト読み上げを行うアプリケーション",
+    description="ウィンドウキャプチャと画面差分検知を行うアプリケーション",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

@@ -4,7 +4,18 @@ Win32 APIを使用して、指定されたウィンドウのキャプチャを�
 """
 
 import logging
-from ctypes import windll, byref, c_ubyte, Array, Structure, c_long, c_ulong, c_void_p, c_ushort, sizeof
+from ctypes import (
+    windll,
+    byref,
+    c_ubyte,
+    Array,
+    Structure,
+    c_long,
+    c_ulong,
+    c_void_p,
+    c_ushort,
+    sizeof,
+)
 from ctypes.wintypes import BOOL, HWND, HDC, RECT
 from typing import Optional, Tuple, Any, cast
 import numpy as np
@@ -14,6 +25,7 @@ from PIL import Image
 
 # 画像処理関連の型定義
 ImageArray = NDArray[np.uint8]
+
 
 class WindowCapture:
     """ウィンドウキャプチャ機能を提供するクラス。"""
@@ -30,12 +42,6 @@ class WindowCapture:
         # Win32 APIの関数を取得
         self.user32 = windll.user32
         self.gdi32 = windll.gdi32
-
-        # DPIスケーリング対応
-        try:
-            windll.user32.SetProcessDPIAware()
-        except Exception as e:
-            self.logger.warning(f"DPIスケーリング設定に失敗しました: {e}")
 
     def find_window(self) -> Optional[HWND]:
         """指定されたタイトルのウィンドウハンドルを取得します。
@@ -164,6 +170,7 @@ class WindowCapture:
             ビットマップ情報構造体。作成失敗時はNone。
         """
         try:
+
             class BITMAPINFOHEADER(Structure):
                 _fields_ = [
                     ("biSize", c_ulong),

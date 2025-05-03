@@ -4,4 +4,4 @@
 モジュールのコレクション。
 """
 
-from src.gui.main_window import main as start_gui 
+from src.gui.main_window import main as start_gui

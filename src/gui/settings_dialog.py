@@ -5,14 +5,32 @@
 
 import tkinter as tk
 from tkinter import ttk
-from typing import Dict, Any, List, Optional, Tuple, Callable, cast, Sequence, TypeVar, Generic, Union, Mapping, MutableMapping, TypedDict, Iterator
+from typing import (
+    Dict,
+    Any,
+    List,
+    Optional,
+    Tuple,
+    Callable,
+    cast,
+    Sequence,
+    TypeVar,
+    Generic,
+    Union,
+    Mapping,
+    MutableMapping,
+    TypedDict,
+    Iterator,
+)
 
 from src.utils.config import Config
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 class SettingItem(TypedDict, total=False):
     """設定項目の型定義。"""
+
     key: str
     label: str
     type: str
@@ -21,14 +39,15 @@ class SettingItem(TypedDict, total=False):
     max: float
     values: List[str]
 
+
 class SettingsDialog:
     """設定ダイアログクラス。"""
 
     def __init__(
-        self, 
-        parent: tk.Tk, 
+        self,
+        parent: tk.Tk,
         config: Config,
-        on_save: Optional[Callable[[Config], None]] = None
+        on_save: Optional[Callable[[Config], None]] = None,
     ) -> None:
         """設定ダイアログを初期化します。
 
@@ -46,90 +65,106 @@ class SettingsDialog:
         self.dialog.focus_set()
         self.dialog.resizable(False, False)
         self.dialog.protocol("WM_DELETE_WINDOW", self.on_cancel)
-        
+
         # ダイアログを親の中央に配置
         self.center_dialog()
-        
+
         # 値の入力ウィジェットをキーとして保持
         self.bool_vars: Dict[str, tk.BooleanVar] = {}
         self.string_vars: Dict[str, tk.StringVar] = {}
         self.double_vars: Dict[str, tk.DoubleVar] = {}
         self.int_vars: Dict[str, tk.IntVar] = {}
-        
+
         # タブコントロールの作成
         self.notebook = ttk.Notebook(self.dialog)
         self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
-        
+
         # 基本設定タブ
         basic_tab = ttk.Frame(self.notebook)
         self.notebook.add(basic_tab, text="基本設定")
-        
-        # OCR設定タブ
-        ocr_tab = ttk.Frame(self.notebook)
-        self.notebook.add(ocr_tab, text="OCR設定")
-        
+
         # 通知設定タブ
         notification_tab = ttk.Frame(self.notebook)
         self.notebook.add(notification_tab, text="通知設定")
-        
+
         # 各タブに設定項目を追加
         basic_settings: List[SettingItem] = [
-            {"key": "capture_interval", "label": "キャプチャ間隔(秒)", "type": "float", "min": 0.1, "max": 60.0, "default": 1.0},
-            {"key": "window_title", "label": "ウィンドウタイトル", "type": "str", "default": ""},
-            {"key": "diff_threshold", "label": "差分検出閾値", "type": "float", "min": 0.0, "max": 1.0, "default": 0.1},
+            {
+                "key": "capture_interval",
+                "label": "キャプチャ間隔(秒)",
+                "type": "float_entry",
+                "min": 0.1,
+                "max": 60.0,
+                "default": 1.0,
+            },
+            {
+                "key": "diff_threshold",
+                "label": "差分検出閾値(%)",
+                "type": "float",
+                "min": 0.0,
+                "max": 100.0,
+                "default": 10.0,
+            },
+            {
+                "key": "diff_method",
+                "label": "差分検出方法",
+                "type": "str",
+                "values": ["ssim", "absdiff"],
+                "default": "ssim",
+            },
         ]
-        
-        ocr_settings: List[SettingItem] = [
-            {"key": "ocr_enabled", "label": "OCR有効", "type": "bool", "default": True},
-            {"key": "ocr_language", "label": "OCR言語", "type": "str", "default": "jpn", "values": ["jpn", "eng", "jpn+eng"]},
-            {"key": "ocr_threshold", "label": "OCR検出閾値", "type": "float", "min": 0.0, "max": 1.0, "default": 0.7},
-        ]
-        
+
         notification_settings: List[SettingItem] = [
-            {"key": "notification_sound", "label": "音声通知", "type": "bool", "default": True},
-            {"key": "notification_popup", "label": "ポップアップ通知", "type": "bool", "default": True},
-            {"key": "notification_flash", "label": "フラッシュ通知", "type": "bool", "default": False},
+            {
+                "key": "notification_sound",
+                "label": "音声通知",
+                "type": "bool",
+                "default": True,
+            },
         ]
-        
+
         self.create_settings_ui(basic_tab, basic_settings)
-        self.create_settings_ui(ocr_tab, ocr_settings)
         self.create_settings_ui(notification_tab, notification_settings)
-        
+
         # ボタンフレーム
         button_frame = ttk.Frame(self.dialog)
         button_frame.pack(fill="x", padx=10, pady=(0, 10))
-        
+
         # 保存ボタン
         save_button = ttk.Button(button_frame, text="保存", command=self.on_save)
         save_button.pack(side="right", padx=5)
-        
+
         # キャンセルボタン
-        cancel_button = ttk.Button(button_frame, text="キャンセル", command=self.on_cancel)
+        cancel_button = ttk.Button(
+            button_frame, text="キャンセル", command=self.on_cancel
+        )
         cancel_button.pack(side="right", padx=5)
 
     def center_dialog(self) -> None:
         """ダイアログを親ウィンドウの中央に配置します。"""
         self.dialog.update_idletasks()
-        
+
         # 親ウィンドウの位置とサイズを取得
         parent_x = self.parent.winfo_rootx()
         parent_y = self.parent.winfo_rooty()
         parent_width = self.parent.winfo_width()
         parent_height = self.parent.winfo_height()
-        
+
         # ダイアログのサイズを取得
         dialog_width = self.dialog.winfo_width()
         dialog_height = self.dialog.winfo_height()
-        
+
         # 中央位置を計算
         x = parent_x + (parent_width - dialog_width) // 2
         y = parent_y + (parent_height - dialog_height) // 2
-        
+
         # ダイアログを中央に配置
         self.dialog.geometry(f"+{x}+{y}")
         self.dialog.transient(self.parent)
 
-    def create_settings_ui(self, tab: ttk.Frame, settings_list: List[SettingItem]) -> None:
+    def create_settings_ui(
+        self, tab: ttk.Frame, settings_list: List[SettingItem]
+    ) -> None:
         """設定項目のUIを作成します。
 
         Args:
@@ -140,20 +175,26 @@ class SettingsDialog:
             # フレームの作成
             frame = ttk.Frame(tab)
             frame.pack(fill="x", padx=10, pady=5)
-            
+
             # ラベルの作成
             label = ttk.Label(frame, text=setting["label"])
             label.grid(row=0, column=0, sticky="w")
-            
+
             key = setting["key"]
             current_value = getattr(self.config, key, setting.get("default", ""))
-            
+
+            # 差分検出閾値の場合は、内部値（0-1）をパーセント（0-100）に変換
+            if key == "diff_threshold":
+                current_value = float(current_value) * 100
+
             # 型に応じた入力ウィジェットの作成
             if setting["type"] == "bool":
                 bool_var = tk.BooleanVar(value=bool(current_value))
-                ttk.Checkbutton(frame, variable=bool_var).grid(row=0, column=1, sticky="e")
+                ttk.Checkbutton(frame, variable=bool_var, takefocus=False).grid(
+                    row=0, column=1
+                )
                 self.bool_vars[key] = bool_var
-                
+
             elif setting["type"] == "str":
                 str_var = tk.StringVar(value=str(current_value))
                 if "values" in setting:
@@ -162,121 +203,108 @@ class SettingsDialog:
                     combobox.grid(row=0, column=1, sticky="e")
                     combobox.state(["readonly"])
                 else:
-                    ttk.Entry(frame, textvariable=str_var).grid(row=0, column=1, sticky="e")
+                    ttk.Entry(frame, textvariable=str_var).grid(
+                        row=0, column=1, sticky="e"
+                    )
                 self.string_vars[key] = str_var
-                    
+
+            elif setting["type"] == "float_entry":
+                # 数値入力フィールド用の特別な処理
+                dbl_var = tk.DoubleVar(value=float(current_value))
+                entry = ttk.Entry(frame, width=10)
+                entry.grid(row=0, column=1, sticky="e")
+                entry.insert(0, str(current_value))
+                
+                def validate_float(action: str, value: str) -> bool:
+                    if action == '1':  # 挿入時
+                        try:
+                            if value == "":
+                                return True
+                            float_val = float(value)
+                            min_val = float(setting.get("min", 0.0))
+                            max_val = float(setting.get("max", float('inf')))
+                            return min_val <= float_val <= max_val
+                        except ValueError:
+                            return False
+                    return True
+                
+                vcmd = (frame.register(validate_float), '%d', '%P')
+                entry.configure(validate='key', validatecommand=vcmd)
+                self.double_vars[key] = dbl_var
+
             elif setting["type"] == "float":
                 dbl_var = tk.DoubleVar(value=float(current_value))
                 if "min" in setting and "max" in setting:
-                    # スライダーの作成
                     min_val = float(setting["min"])
                     max_val = float(setting["max"])
-                    
+
                     # 値表示ラベル
-                    value_label = ttk.Label(frame, text=str(current_value))
+                    value_label = ttk.Label(frame, text=f"{current_value:.1f}%")
                     value_label.grid(row=0, column=2, padx=5)
-                    
+
                     scale = ttk.Scale(
-                        frame, 
-                        from_=min_val, 
-                        to=max_val, 
-                        variable=dbl_var, 
-                        orient="horizontal"
+                        frame,
+                        from_=min_val,
+                        to=max_val,
+                        variable=dbl_var,
+                        orient="horizontal",
                     )
                     scale.grid(row=0, column=1, sticky="e")
-                    
+
                     # スライダー変更時のコールバック（ラベル更新用）
-                    def on_float_slider_change(event: tk.Event, lbl: ttk.Label, var: tk.DoubleVar) -> None:
+                    def on_float_slider_change(
+                        event: tk.Event, lbl: ttk.Label, var: tk.DoubleVar
+                    ) -> None:
                         value = var.get()
-                        lbl.config(text=str(value))
-                    
+                        lbl.config(text=f"{value:.1f}%")
+
                     # lambda型を明示するために関数定義で包む
-                    def make_float_slider_callback(lbl: ttk.Label, var: tk.DoubleVar) -> Callable[[tk.Event], None]:
+                    def make_float_slider_callback(
+                        lbl: ttk.Label, var: tk.DoubleVar
+                    ) -> Callable[[tk.Event], None]:
                         return lambda e: on_float_slider_change(e, lbl, var)
-                    
-                    scale.bind("<Motion>", make_float_slider_callback(value_label, dbl_var))
+
+                    callback = make_float_slider_callback(value_label, dbl_var)
+                    scale.bind("<Motion>", callback)
+                    scale.bind("<ButtonRelease-1>", callback)
                 else:
-                    # 通常の数値入力
-                    ttk.Entry(frame, textvariable=dbl_var).grid(row=0, column=1, sticky="e")
-                
-                self.double_vars[key] = dbl_var
-                
-            elif setting["type"] == "int":
-                int_var = tk.IntVar(value=int(current_value))
-                if "min" in setting and "max" in setting:
-                    # スライダーの作成
-                    min_val = float(setting["min"])
-                    max_val = float(setting["max"])
-                    
-                    # 値表示ラベル
-                    value_label = ttk.Label(frame, text=str(current_value))
-                    value_label.grid(row=0, column=2, padx=5)
-                    
-                    # IntVarを使用してスケールウィジェットを作成
-                    scale = ttk.Scale(
-                        frame, 
-                        from_=min_val, 
-                        to=max_val, 
-                        variable=int_var, 
-                        orient="horizontal"
+                    ttk.Entry(frame, textvariable=dbl_var).grid(
+                        row=0, column=1, sticky="e"
                     )
-                    scale.grid(row=0, column=1, sticky="e")
-                    
-                    # スライダー変更時のコールバック（ラベル更新用）
-                    def on_int_slider_change(event: tk.Event, lbl: ttk.Label, var: tk.IntVar) -> None:
-                        value = var.get()
-                        value_int = int(value)
-                        var.set(value_int)
-                        lbl.config(text=str(value_int))
-                    
-                    # lambda型を明示するために関数定義で包む
-                    def make_int_slider_callback(lbl: ttk.Label, var: tk.IntVar) -> Callable[[tk.Event], None]:
-                        return lambda e: on_int_slider_change(e, lbl, var)
-                    
-                    scale.bind("<Motion>", make_int_slider_callback(value_label, int_var))
-                else:
-                    # 通常の数値入力
-                    ttk.Entry(frame, textvariable=int_var).grid(row=0, column=1, sticky="e")
-                
-                self.int_vars[key] = int_var
+                self.double_vars[key] = dbl_var
 
     def on_save(self) -> None:
         """設定を保存します。"""
-        # BooleanVar経由の設定を保存
-        for key in self.bool_vars:
-            bool_var = self.bool_vars[key]
-            setattr(self.config, key, bool_var.get())
-        
-        # StringVar経由の設定を保存
-        for key in self.string_vars:
-            str_var = self.string_vars[key]
-            setattr(self.config, key, str_var.get())
-        
-        # DoubleVar経由の設定を保存
-        for key in self.double_vars:
-            dbl_var = self.double_vars[key]
-            setattr(self.config, key, dbl_var.get())
-        
-        # IntVar経由の設定を保存
-        for key in self.int_vars:
-            int_var = self.int_vars[key]
-            setattr(self.config, key, int_var.get())
-        
-        # コールバックがあれば呼び出す
+        # 各設定値を取得して保存
+        for key, var in self.bool_vars.items():
+            setattr(self.config, key, var.get())
+
+        for key, var in self.string_vars.items():
+            setattr(self.config, key, var.get())
+
+        for key, var in self.double_vars.items():
+            value = var.get()
+            # 差分検出閾値の場合は、パーセント（0-100）から内部値（0-1）に変換
+            if key == "diff_threshold":
+                value = value / 100.0
+            setattr(self.config, key, value)
+
+        for key, var in self.int_vars.items():
+            setattr(self.config, key, var.get())
+
+        # 保存コールバックを呼び出し
         if self.on_save_callback:
             self.on_save_callback(self.config)
-        
-        # ダイアログを閉じる
+
         self.dialog.destroy()
 
     def on_cancel(self) -> None:
         """キャンセル処理を行います。"""
         self.dialog.destroy()
 
+
 def show_settings_dialog(
-    parent: tk.Tk, 
-    config: Config, 
-    on_save: Optional[Callable[[Config], None]] = None
+    parent: tk.Tk, config: Config, on_save: Optional[Callable[[Config], None]] = None
 ) -> None:
     """設定ダイアログを表示します。
 
@@ -285,4 +313,4 @@ def show_settings_dialog(
         config: 設定オブジェクト
         on_save: 設定保存時のコールバック
     """
-    SettingsDialog(parent, config, on_save) 
+    SettingsDialog(parent, config, on_save)

@@ -12,22 +12,10 @@ DEFAULT_LANGUAGE = "ja"
 # メッセージ定義
 MESSAGES: Dict[str, Dict[str, str]] = {
     "ja": {
-        "ocr_success": "テキストを抽出しました: {length}文字",
-        "ocr_empty": "テキストが検出されませんでした",
-        "ocr_error": "テキスト抽出中にエラーが発生しました: {error}",
-        "tesseract_not_found": "Tesseractが指定されたパスに見つかりません: {path}",
         "preprocessing_error": "画像の前処理中にエラーが発生しました: {error}",
-        "test_success": "OCRエンジンのテストに成功しました",
-        "test_failure": "OCRエンジンのテストに失敗しました",
     },
     "en": {
-        "ocr_success": "Text extracted: {length} characters",
-        "ocr_empty": "No text detected",
-        "ocr_error": "Error occurred during text extraction: {error}",
-        "tesseract_not_found": "Tesseract not found at specified path: {path}",
         "preprocessing_error": "Error occurred during image preprocessing: {error}",
-        "test_success": "OCR engine test succeeded",
-        "test_failure": "OCR engine test failed",
     },
 }
 

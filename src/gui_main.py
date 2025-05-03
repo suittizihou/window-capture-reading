@@ -6,9 +6,11 @@
 
 from src.gui import start_gui
 
+
 def main():
     """アプリケーションを起動します（レガシー互換関数）。"""
     start_gui()
+
 
 if __name__ == "__main__":
     main()

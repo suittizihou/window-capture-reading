@@ -19,6 +19,7 @@ from src.utils.logging_config import setup_logging
 # 画像処理関連の型定義
 ImageArray = NDArray[np.uint8]
 
+
 def run_main_loop(
     running: threading.Event,
     roi: Optional[List[int]] = None,
@@ -42,9 +43,7 @@ def run_main_loop(
         # 差分検知器の初期化
         detector = DifferenceDetector(
             threshold=config.diff_threshold,
-            ocr_enabled=config.ocr_enabled,
-            ocr_language=config.ocr_language,
-            ocr_threshold=config.ocr_threshold
+            diff_method=config.diff_method,
         )
 
         # メインループ
@@ -91,25 +90,25 @@ def run_main_loop(
             detector.shutdown()
         logger.info("メインループを終了しました")
 
+
 def main() -> None:
     """アプリケーションのエントリーポイント。"""
     # ロギングの設定
     setup_logging()
-    
+
     # コマンドライン引数の解析
     parser = argparse.ArgumentParser(description="Window Capture Reading")
     parser.add_argument(
-        "--window-title", "-w", 
-        help="キャプチャ対象のウィンドウタイトル", 
-        default=None
+        "--window-title", "-w", help="キャプチャ対象のウィンドウタイトル", default=None
     )
     parser.add_argument(
-        "--no-gui", "-n", 
+        "--no-gui",
+        "-n",
         help="GUIを使用せずにコマンドラインモードで実行",
-        action="store_true"
+        action="store_true",
     )
     args = parser.parse_args()
-    
+
     if args.no_gui:
         # コマンドラインモード
         event = threading.Event()
@@ -122,7 +121,9 @@ def main() -> None:
     else:
         # GUIモード
         from src.gui import start_gui
-        start_gui(args.window_title)
+
+        start_gui()
+
 
 if __name__ == "__main__":
     main()

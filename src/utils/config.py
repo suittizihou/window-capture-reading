@@ -36,27 +36,23 @@ class Config:
     """
     設定を管理するデータクラス。
     """
+
     # ウィンドウ設定
     window_title: str = ""
     capture_interval: float = 1.0
-    
+
     # 差分検出設定
     diff_threshold: float = 0.05
     diff_method: str = "ssim"
     diff_max_history: int = 10
     diff_debug_mode: bool = False
-    
-    # OCR設定
-    ocr_enabled: bool = True
-    ocr_language: str = "jpn"
-    ocr_threshold: float = 0.7
-    
+
     # 通知設定
     notification_sound: bool = True
     notification_popup: bool = True
     notification_flash: bool = False
     notification_cooldown: float = 2.0
-    
+
     # クラス変数
     _logger: ClassVar[logging.Logger] = logging.getLogger(__name__)
 
@@ -75,7 +71,9 @@ class Config:
         else:
             # 設定ファイルが存在しない場合は作成する
             self.save()
-            self._logger.info(f"デフォルト設定ファイルを作成しました: {self.config_path}")
+            self._logger.info(
+                f"デフォルト設定ファイルを作成しました: {self.config_path}"
+            )
 
     def _get_config_path(self) -> Path:
         """
@@ -101,7 +99,7 @@ class Config:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                
+
             # 有効なフィールドのみを設定
             for key, value in data.items():
                 if hasattr(self, key):
@@ -116,20 +114,22 @@ class Config:
             path: 保存先のパス（省略時は標準の設定ファイル）
         """
         save_path = Path(path) if path else self.config_path
-        
+
         try:
             # 必要なディレクトリを作成
             save_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # dataclassをdictに変換して保存
             with open(save_path, "w", encoding="utf-8") as f:
                 # クラス変数は除外
-                config_dict = {k: v for k, v in asdict(self).items() if not k.startswith('_')}
-                if 'config_path' in config_dict:
-                    del config_dict['config_path']
-                    
+                config_dict = {
+                    k: v for k, v in asdict(self).items() if not k.startswith("_")
+                }
+                if "config_path" in config_dict:
+                    del config_dict["config_path"]
+
                 json.dump(config_dict, f, indent=2, ensure_ascii=False)
-                
+
             self._logger.info(f"設定を保存しました: {save_path}")
         except Exception as e:
             self._logger.error(f"設定の保存に失敗しました: {e}")
@@ -151,7 +151,7 @@ class Config:
     def get_window_titles(self) -> List[str]:
         """
         現在表示中のウィンドウタイトル一覧を取得します。
-        
+
         Returns:
             List[str]: ウィンドウタイトルのリスト
         """

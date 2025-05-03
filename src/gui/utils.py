@@ -18,6 +18,7 @@ ImageArray = NDArray[np.uint8]
 # 表示関連定数
 MAX_TITLE_DISPLAY_LENGTH = 24  # 表示上限（全角換算で調整可）
 
+
 def pil_to_cv(pil_image: Image.Image) -> ImageArray:
     """PIL画像をOpenCV形式に変換します。
 
@@ -39,6 +40,7 @@ def pil_to_cv(pil_image: Image.Image) -> ImageArray:
 
     return cast(ImageArray, cv_image)
 
+
 def cv_to_pil(cv_image: ImageArray) -> Image.Image:
     """OpenCV形式の画像をPIL形式に変換します。
 
@@ -55,6 +57,7 @@ def cv_to_pil(cv_image: ImageArray) -> Image.Image:
     pil_image = Image.fromarray(rgb_image)
 
     return pil_image
+
 
 def play_notification_sound() -> bool:
     """通知音を再生する。
@@ -76,6 +79,7 @@ def play_notification_sound() -> bool:
         logging.error(f"通知音の再生に失敗しました: {e}")
         return False
 
+
 def ellipsize(text: str, max_length: int = MAX_TITLE_DISPLAY_LENGTH) -> str:
     """長すぎるテキストを...で省略して返す。
 
@@ -88,4 +92,4 @@ def ellipsize(text: str, max_length: int = MAX_TITLE_DISPLAY_LENGTH) -> str:
     """
     if len(text) <= max_length:
         return text
-    return text[: max_length - 3] + "..." 
+    return text[: max_length - 3] + "..."

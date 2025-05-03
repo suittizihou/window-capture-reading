@@ -19,4 +19,3 @@ ignore:
   # 画面キャプチャと外部システム依存のコードを除外
   - "src/main.py"
   - "src/services/window_capture.py"
-  - "src/services/bouyomi_client.py"

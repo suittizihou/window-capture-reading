@@ -22,7 +22,6 @@
 | パッケージ | バージョン | ホームページ |
 |------------|------------|-------------|
 | opencv-python | 4.11.0.86 | [https://github.com/opencv/opencv-python](https://github.com/opencv/opencv-python) |
-| pytesseract | 0.3.10 | [https://github.com/madmaze/pytesseract](https://github.com/madmaze/pytesseract) |
 | types-Pillow | 10.2.0.20240324 | [https://github.com/python/typeshed](https://github.com/python/typeshed) |
 
 ### Apache Software License; BSD License {#apache-software-license;-bsd-license} 
