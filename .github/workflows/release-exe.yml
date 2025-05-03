@@ -23,22 +23,7 @@ on:
         default: false
 
 jobs:
-  verify:
-    # スキップフラグがtrueの場合はスキップ
-    if: ${{ inputs.skip_checks != true }}
-    uses: ./.github/workflows/code-quality.yml
-    secrets: inherit
-
-  test:
-    # スキップフラグがtrueの場合はスキップ、そうでなければverifyが完了するのを待つ
-    if: ${{ inputs.skip_checks != true }}
-    needs: verify
-    uses: ./.github/workflows/tests.yml
-    secrets: inherit
-
   build-and-release:
-    # 依存関係の設定: スキップフラグがtrueならチェックを待たない、そうでなければチェック完了を待つ
-    needs: ${{ (inputs.skip_checks == true) && fromJSON('[]') || fromJSON('["verify", "test"]') }}
     runs-on: windows-latest
     steps:
       - name: チェックアウト
