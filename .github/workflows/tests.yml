@@ -29,6 +29,10 @@ jobs:
       run: |
         python -m pytest tests/ --cov=src/ --cov-report=xml
 
+    - name: Add UTF-8 encoding to coverage.xml
+      run: |
+        (Get-Content coverage.xml) -replace '<\?xml version="1.0" \?>', '<?xml version="1.0" encoding="UTF-8"?>' | Set-Content coverage.xml -Encoding UTF8
+
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
       with:
@@ -37,3 +41,4 @@ jobs:
         fail_ci_if_error: true
       env:
         PYTHONIOENCODING: utf-8
+        PYTHONUTF8: 1
