@@ -1,0 +1,87 @@
+name: タグ作成とリリース
+
+# リポジトリへの書き込み権限を追加
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_increment:
+        description: 'バージョン増分タイプ'
+        required: true
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+        default: 'patch'
+      custom_tag:
+        description: '独自タグ名（空白の場合は自動生成されます）'
+        required: false
+        type: string
+      prerelease:
+        description: 'プレリリースとして作成'
+        required: false
+        type: boolean
+        default: false
+      prerelease_id:
+        description: 'プレリリース識別子（beta/alpha/rc）'
+        required: false
+        type: string
+        default: 'beta'
+
+jobs:
+  # 権限チェック - 最初に実行
+  check-permissions:
+    runs-on: ubuntu-latest
+    environment: release # 環境制限を適用
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+        
+      - name: 権限チェック
+        uses: ./.github/actions/check-permissions
+        with:
+          environment: 'release'
+          required-permission: 'write'
+
+  # コード品質チェック - 既存のワークフローを呼び出し
+  quality-check:
+    needs: [check-permissions]
+    uses: ./.github/workflows/code-quality.yml
+    secrets: inherit
+
+  # テスト実行 - 既存のワークフローを呼び出し
+  run-tests:
+    needs: [check-permissions, quality-check]
+    uses: ./.github/workflows/tests.yml
+    secrets: inherit
+  
+  # ライセンスチェック - 既存のワークフローを呼び出し
+  check-licenses:
+    needs: [check-permissions, run-tests]
+    uses: ./.github/workflows/check-licenses.yml
+    secrets: inherit
+
+  # タグ作成 - 既存のワークフローを呼び出し
+  create-tag:
+    needs: [check-permissions, quality-check, run-tests, check-licenses]
+    uses: ./.github/workflows/create-release-tag.yml
+    with:
+      tag_increment: ${{ github.event.inputs.tag_increment }}
+      custom_tag: ${{ github.event.inputs.custom_tag }}
+      prerelease: ${{ github.event.inputs.prerelease }}
+      prerelease_id: ${{ github.event.inputs.prerelease_id }}
+    secrets: inherit
+
+  # EXEのビルドとリリース - 既存のワークフローを呼び出し
+  build-and-release:
+    needs: [create-tag]
+    # タグが正常に作成された場合のみ実行
+    uses: ./.github/workflows/release-exe.yml
+    with:
+      tag_name: ${{ needs.create-tag.outputs.tag_name }}
+      is_prerelease: ${{ needs.create-tag.outputs.is_prerelease }}
+      skip_checks: true # 既にチェックは実行済みなのでスキップ
+    secrets: inherit 

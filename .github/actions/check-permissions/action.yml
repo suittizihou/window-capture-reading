@@ -1,0 +1,41 @@
+name: 'リリース権限チェック'
+description: 'ユーザーがリリース権限を持っているかチェックします'
+
+inputs:
+  environment:
+    description: '必要な環境（例：release）'
+    required: false
+    default: 'release'
+  required-permission:
+    description: '必要な権限レベル（write/admin）'
+    required: false
+    default: 'write'
+
+runs:
+  using: "composite"
+  steps:
+    - name: 権限チェック
+      shell: pwsh
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        REQUIRED_ENV: ${{ inputs.environment }}
+        REQUIRED_PERMISSION: ${{ inputs.required-permission }}
+      run: |
+        Write-Host "::group::権限チェックを実行中..."
+        
+        # 実行ユーザーを表示
+        Write-Host "アクション実行者: ${{ github.actor }}"
+        Write-Host "リポジトリ: ${{ github.repository }}"
+        
+        # 環境名の表示
+        if ([string]::IsNullOrEmpty("$env:REQUIRED_ENV")) {
+          Write-Host "環境チェックはスキップされます"
+        } else {
+          Write-Host "必要な環境: $env:REQUIRED_ENV"
+        }
+        
+        # 必要に応じて環境チェックやGitHub APIを使った権限チェックをここに追加できます
+        # 現在はGitHub Environments機能に委任しています
+        
+        Write-Host "権限チェックが完了しました"
+        Write-Host "::endgroup::" 

@@ -30,12 +30,44 @@ on:
         required: false
         type: string
         default: 'beta'
+  # 他のワークフローからの呼び出しを許可
+  workflow_call:
+    inputs:
+      tag_increment:
+        description: 'バージョン増分タイプ'
+        required: false
+        type: string
+        default: 'patch'
+      custom_tag:
+        description: '独自タグ名（空白の場合は自動生成されます）'
+        required: false
+        type: string
+      prerelease:
+        description: 'プレリリースとして作成'
+        required: false
+        type: boolean
+        default: false
+      prerelease_id:
+        description: 'プレリリース識別子（beta/alpha/rc）'
+        required: false
+        type: string
+        default: 'beta'
+    outputs:
+      tag_name:
+        description: '作成されたタグ名'
+        value: ${{ jobs.create-tag.outputs.tag_name }}
+      is_prerelease:
+        description: 'プレリリースかどうか'
+        value: ${{ jobs.create-tag.outputs.is_prerelease }}
 
 jobs:
   create-tag:
     runs-on: windows-latest
     # 環境を使用してアクセスを制限
     environment: release
+    outputs:
+      tag_name: ${{ steps.decide_tag.outputs.tag_to_use }}
+      is_prerelease: ${{ steps.decide_tag.outputs.is_prerelease }}
     steps:
       - name: リポジトリのチェックアウト
         uses: actions/checkout@v4
@@ -63,7 +95,7 @@ jobs:
             $patch = [int]$Matches[3]
             
             # 増分タイプに応じてバージョンを更新
-            switch ("${{ github.event.inputs.tag_increment }}") {
+            switch ("${{ inputs.tag_increment || github.event.inputs.tag_increment }}") {
               "major" {
                 $major++
                 $minor = 0
@@ -80,8 +112,8 @@ jobs:
             
             # 新しいバージョンタグを構築
             $newTag = "v${major}.${minor}.${patch}"
-            if ("${{ github.event.inputs.prerelease }}" -eq "true") {
-              $prelId = "${{ github.event.inputs.prerelease_id }}"
+            if ("${{ inputs.prerelease || github.event.inputs.prerelease }}" -eq "true") {
+              $prelId = "${{ inputs.prerelease_id || github.event.inputs.prerelease_id }}"
               if ([string]::IsNullOrEmpty($prelId)) {
                 $prelId = "beta"
               }
@@ -90,8 +122,8 @@ jobs:
             echo "new_tag=$newTag" >> $env:GITHUB_OUTPUT
           } else {
             $newTag = "v0.1.0"
-            if ("${{ github.event.inputs.prerelease }}" -eq "true") {
-              $prelId = "${{ github.event.inputs.prerelease_id }}"
+            if ("${{ inputs.prerelease || github.event.inputs.prerelease }}" -eq "true") {
+              $prelId = "${{ inputs.prerelease_id || github.event.inputs.prerelease_id }}"
               if ([string]::IsNullOrEmpty($prelId)) {
                 $prelId = "beta"
               }
@@ -104,7 +136,7 @@ jobs:
         id: decide_tag
         run: |
           # カスタムタグが指定されていればそれを使用、そうでなければ自動生成したタグを使用
-          $customTag = "${{ github.event.inputs.custom_tag }}"
+          $customTag = "${{ inputs.custom_tag || github.event.inputs.custom_tag }}"
           if ([string]::IsNullOrEmpty($customTag)) {
             $tagToUse = "${{ steps.get_version.outputs.new_tag }}"
           } else {
@@ -116,8 +148,8 @@ jobs:
             }
             
             # プレリリースフラグが有効で、カスタムタグにプレリリース識別子がなければ追加
-            if ("${{ github.event.inputs.prerelease }}" -eq "true" -and -not $tagToUse.Contains("-")) {
-              $prelId = "${{ github.event.inputs.prerelease_id }}"
+            if ("${{ inputs.prerelease || github.event.inputs.prerelease }}" -eq "true" -and -not $tagToUse.Contains("-")) {
+              $prelId = "${{ inputs.prerelease_id || github.event.inputs.prerelease_id }}"
               if ([string]::IsNullOrEmpty($prelId)) {
                 $prelId = "beta"
               }

@@ -1,6 +1,7 @@
 name: Check Licenses
 
 on:
+  workflow_call:  # 他のワークフローからの呼び出しを許可
   push:
     branches: [ main ]
     paths:
