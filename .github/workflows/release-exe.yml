@@ -10,7 +10,7 @@ on:
 
 jobs:
   verify:
-    uses: ./.github/workflows/ci-cd.yml
+    uses: ./.github/workflows/code-quality.yml
     secrets: inherit
 
   test:

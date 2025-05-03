@@ -32,7 +32,43 @@ on:
         default: 'beta'
 
 jobs:
+  check-permissions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリ管理者権限の確認
+        id: check_permissions
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { repo, owner } = context.repo;
+            try {
+              // リポジトリに対する呼び出し元のユーザー権限を取得
+              const { data: permissions } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner,
+                repo,
+                username: context.actor,
+              });
+              
+              console.log(`ユーザー ${context.actor} の権限: ${permissions.permission}`);
+              
+              // admin権限を持つユーザーのみ実行可能
+              if (permissions.permission === 'admin') {
+                return 'authorized';
+              } else {
+                core.setFailed(`このワークフローを実行する権限がありません。リポジトリの管理者権限が必要です。`);
+                return 'unauthorized';
+              }
+            } catch (error) {
+              console.error(`エラー: ${error.message}`);
+              core.setFailed(`権限の確認中にエラーが発生しました: ${error.message}`);
+              return 'error';
+            }
+    outputs:
+      status: ${{ steps.check_permissions.outputs.result }}
+
   create-tag:
+    needs: check-permissions
+    if: needs.check-permissions.outputs.status == 'authorized'
     runs-on: windows-latest
     
     steps:
