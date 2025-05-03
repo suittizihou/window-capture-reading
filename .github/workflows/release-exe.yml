@@ -14,8 +14,8 @@ on:
       is_prerelease:
         description: 'プレリリースかどうか'
         required: false
-        type: boolean
-        default: false
+        type: string
+        default: 'false'
 
 jobs:
   build-and-release:
@@ -32,7 +32,7 @@ jobs:
         run: |
           # タグ名を取得
           $tag = "${{ inputs.tag_name }}"
-          $isPrerelease = [bool]("${{ inputs.is_prerelease }}" -eq "true")
+          $isPrerelease = "${{ inputs.is_prerelease }}" -eq "true"
           
           echo "tag_name=$tag" >> $env:GITHUB_OUTPUT
           echo "is_prerelease=$isPrerelease" >> $env:GITHUB_OUTPUT

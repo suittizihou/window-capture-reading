@@ -71,7 +71,7 @@ jobs:
     with:
       tag_increment: ${{ github.event.inputs.tag_increment }}
       custom_tag: ${{ github.event.inputs.custom_tag }}
-      prerelease: ${{ github.event.inputs.prerelease }}
+      prerelease: '${{ github.event.inputs.prerelease }}'
       prerelease_id: ${{ github.event.inputs.prerelease_id }}
     secrets: inherit
 
@@ -82,5 +82,5 @@ jobs:
     uses: ./.github/workflows/release-exe.yml
     with:
       tag_name: ${{ needs.create-tag.outputs.tag_name }}
-      is_prerelease: ${{ needs.create-tag.outputs.is_prerelease }}
+      is_prerelease: '${{ needs.create-tag.outputs.is_prerelease }}'
     secrets: inherit 

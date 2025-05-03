@@ -5,31 +5,6 @@ permissions:
   contents: write
 
 on:
-  workflow_dispatch:
-    inputs:
-      tag_increment:
-        description: 'バージョン増分タイプ'
-        required: true
-        type: choice
-        options:
-          - major
-          - minor
-          - patch
-        default: 'patch'
-      custom_tag:
-        description: '独自タグ名（空白の場合は自動生成されます）'
-        required: false
-        type: string
-      prerelease:
-        description: 'プレリリースとして作成'
-        required: false
-        type: boolean
-        default: false
-      prerelease_id:
-        description: 'プレリリース識別子（beta/alpha/rc）'
-        required: false
-        type: string
-        default: 'beta'
   # 他のワークフローからの呼び出しを許可
   workflow_call:
     inputs:
@@ -45,8 +20,8 @@ on:
       prerelease:
         description: 'プレリリースとして作成'
         required: false
-        type: boolean
-        default: false
+        type: string
+        default: 'false'
       prerelease_id:
         description: 'プレリリース識別子（beta/alpha/rc）'
         required: false
