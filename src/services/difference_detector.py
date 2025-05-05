@@ -153,7 +153,7 @@ class DifferenceDetector:
         score = 1.0 - (diff_pixels / total_pixels)
 
         # 閾値判定（一定数以上のピクセルが異なれば差分あり）
-        has_diff = diff_pixels > 100
+        has_diff = score < (1.0 - self.threshold)
 
         # 差分画像を生成
         diff_image = self._create_diff_with_absdiff(img1, img2, gray1, gray2)
