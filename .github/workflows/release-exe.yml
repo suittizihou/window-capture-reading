@@ -48,6 +48,30 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: バージョン情報を埋め込む
+        run: |
+          # タグからバージョン番号を抽出（vプレフィックスを削除）
+          $version = "${{ inputs.tag_name }}".TrimStart('v')
+          $buildDate = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+          
+          # バージョン情報ファイルを作成
+          $versionContent = @"
+          """バージョン情報を管理するモジュール。
+
+          このファイルはGitHub Actionsビルド時に自動生成されます。
+          """
+
+          # リリースバージョン
+          __version__ = "$version"
+          __build_date__ = "$buildDate"
+          "@
+          
+          Set-Content -Path "src/version.py" -Value $versionContent -Encoding UTF8
+          
+          # 確認表示
+          Write-Host "バージョン情報を埋め込みました:"
+          Get-Content -Path "src/version.py"
+
       - name: EXEビルド
         run: |
           pyinstaller --noconfirm --onefile --windowed --name WindowCaptureReading --add-data "src;src" --add-data "resources;resources" src/gui_main.py --distpath dist

@@ -442,9 +442,17 @@ class MainWindow:
 
     def _menu_about(self) -> None:
         """バージョン情報を表示します。"""
+        try:
+            # バージョン情報のインポートを試みる
+            from src.version import __version__, __build_date__
+            version_info = f"Version {__version__}\nビルド日時: {__build_date__}"
+        except ImportError:
+            # 開発環境では version.py がない場合がある
+            version_info = "Version 開発版"
+        
         messagebox.showinfo(
             "バージョン情報",
-            "Window Capture Reading\nVersion 2.1.0\n\n"
+            f"Window Capture Reading\n{version_info}\n\n"
             "ウィンドウをキャプチャして変化を検出するツールです。",
         )
 
