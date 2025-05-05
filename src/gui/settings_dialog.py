@@ -292,6 +292,9 @@ class SettingsDialog:
         for key, var in self.int_vars.items():
             setattr(self.config, key, int(var.get()))
 
+        # 設定をファイルに保存
+        self.config.save()
+
         # 保存コールバックを呼び出し
         if self.on_save_callback:
             self.on_save_callback(self.config)

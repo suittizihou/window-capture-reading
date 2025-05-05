@@ -9,7 +9,7 @@ setup(
         "numpy",
         "Pillow",
     ],
-    python_requires=">=3.11",
+    python_requires=">=3.11.7",
     author="suittizihou",
     description="ウィンドウキャプチャと画面差分検知を行うアプリケーション",
     classifiers=[
