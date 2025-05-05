@@ -44,14 +44,9 @@ class Config:
     # 差分検出設定
     diff_threshold: float = 0.05
     diff_method: str = "ssim"
-    diff_max_history: int = 10
-    diff_debug_mode: bool = False
 
     # 通知設定
     notification_sound: bool = True
-    notification_popup: bool = True
-    notification_flash: bool = False
-    notification_cooldown: float = 2.0
 
     # クラス変数
     _logger: ClassVar[logging.Logger] = logging.getLogger(__name__)

@@ -49,7 +49,7 @@ def check_required_files():
         "LICENSE",
         "LICENSES.md",
         "requirements.txt",
-        "config.ini",
+        "config.json",
         "docs/environment_setup.md",
         "docs/gui_usage.md",
         "docs/setup_guide.md",

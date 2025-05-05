@@ -7,7 +7,7 @@
 ## 特徴
 - 任意のウィンドウからリアルタイムで画面変化を検出
 - 変化率に基づいた通知機能
-- 柔軟な設定（config.iniファイル）
+- 柔軟な設定（config.jsonファイル）
 - ログ出力・メモリ監視機能
 
 ---
@@ -32,7 +32,7 @@ pip install -r requirements.txt
 ---
 
 ## 初期設定
-1. プロジェクトルートディレクトリに`config.ini`ファイルを作成または編集
+1. プロジェクトルートディレクトリに`config.json`ファイルを作成または編集
    （ファイルが存在しない場合、アプリケーション実行時に自動生成されます）
 
 詳細は [docs/environment_setup.md](docs/environment_setup.md) を参照
@@ -45,7 +45,7 @@ pip install -r requirements.txt
 python -m src.gui_main
 ```
 
-- ウィンドウタイトルは`config.ini`で指定（例：LDPlayer, Chrome など）
+- ウィンドウタイトルは`config.json`で指定（例：LDPlayer, Chrome など）
 - 起動後、指定ウィンドウの画面変化が検出されると通知音が出力されます
 
 ---
@@ -54,7 +54,7 @@ python -m src.gui_main
 - 検出対象ウィンドウをアクティブにしておく
 - 画面の変化率が設定した閾値を超えると通知音が鳴る
 - ログは`app.log`に出力
-- メモリ監視や詳細設定は`config.ini`で制御
+- メモリ監視や詳細設定は`config.json`で制御
 
 ---
 
@@ -67,7 +67,7 @@ python -m src.gui_main
 
 ## 詳細ガイド
 - [docs/setup_guide.md](docs/setup_guide.md) ... セットアップガイド
-- [docs/environment_setup.md](docs/environment_setup.md) ... config.ini設定例
+- [docs/environment_setup.md](docs/environment_setup.md) ... config.json設定例
 - [docs/gui_usage.md](docs/gui_usage.md) ... GUI使用方法
 - [docs/exe_build.md](docs/exe_build.md) ... 実行ファイル（EXE）ビルド方法
 - [docs/license_compliance.md](docs/license_compliance.md) ... ライセンスコンプライアンスガイド

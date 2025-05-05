@@ -27,25 +27,22 @@ pip install -r requirements.txt
 ## 2. アプリケーション設定
 
 ### 設定ファイルの準備
-1. プロジェクトルートに`config.ini`ファイルを作成（ない場合は自動生成されます）
-2. `config.ini`ファイルを編集して必要な設定を行う：
+1. プロジェクトルートに`config.json`ファイルを作成（ない場合は自動生成されます）
+2. `config.json`ファイルを編集して必要な設定を行う：
 
-```ini
-[Capture]
-window_title = Chrome
-change_threshold = 0.05
-capture_interval = 1.0
-
-[Notification]
-sound_file = resources/sounds/notification.wav
-
-[Processing]
-preprocessing_enabled = True
+```json
+{
+  "window_title": "Chrome",
+  "capture_interval": 1.0,
+  "diff_threshold": 0.05,
+  "diff_method": "ssim",
+  "notification_sound": true
+}
 ```
 
-### 通知音ファイルの準備
-1. `resources/sounds/`ディレクトリに好みの通知音（.wav形式）を配置
-2. `config.ini`ファイルの`[Notification]`セクションの`sound_file`を適切に設定
+### 通知設定
+1. `config.json`ファイルの通知関連設定を必要に応じて変更
+   - `notification_sound`: 通知音の有効/無効
 
 ## 3. アプリケーションの実行
 
@@ -57,7 +54,7 @@ python -m src.gui_main
 ## 4. トラブルシューティング
 
 ### 変化検出の問題
-1. 変化率閾値（`change_threshold`）を調整
+1. 変化率閾値（`diff_threshold`）を調整
    - 閾値を下げると検出感度が上がる（0.01-0.1の範囲で調整推奨）
    - 閾値を上げると誤検出が減少
 
@@ -67,16 +64,15 @@ python -m src.gui_main
 3. 前景ウィンドウとして表示されていることを確認
 
 ### 通知音の問題
-1. 音声ファイルのパスが正しいか確認
-2. 音声ファイルが破損していないか確認
-3. システムの音量設定を確認
+1. `notification_sound`設定が`true`になっているか確認
+2. システムの音量設定を確認
 
 ## 5. 補足情報
 
 ### 推奨設定
 - 変化率閾値：0.05（標準的な変化検出）
 - キャプチャ間隔：1.0秒（パフォーマンスと検出精度のバランス）
-- 画像前処理：有効（ノイズ除去による誤検出防止）
+- 差分検出方式：ssim（構造的類似性による高精度な差分検出）
 
 ### 注意事項
 - ウィンドウのタイトルは部分一致で検索されます

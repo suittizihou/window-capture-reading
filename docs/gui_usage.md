@@ -37,14 +37,13 @@ Tkinterを使用して実装されたGUIは、以下の方法で起動できま�
 
 1. 「設定」ボタンをクリックすると設定ダイアログが開きます。
 2. 必要な設定を変更します：
-   - **[Capture]セクション**:
+   - **基本設定**:
      - `window_title`: キャプチャするウィンドウのタイトル
-     - `change_threshold`: 変化率の閾値
+     - `diff_threshold`: 変化率の閾値
      - `capture_interval`: キャプチャ間隔（秒）
-   - **[Notification]セクション**:
-     - `sound_file`: 通知音のファイルパス
-   - **[Processing]セクション**:
-     - `preprocessing_enabled`: 画像前処理の有効/無効
+     - `diff_method`: 差分検出アルゴリズム（"ssim"または"absdiff"）
+   - **通知設定**:
+     - `notification_sound`: 通知音の有効/無効
 3. 「保存」ボタンをクリックすると設定が保存され、アプリケーションが新しい設定で再起動します。
 
 > **注意**: 設定を保存すると、アプリケーションは自動的に再起動して新しい設定を適用します。
@@ -56,19 +55,16 @@ Tkinterを使用して実装されたGUIは、以下の方法で起動できま�
 
 ## 設定ファイル
 
-GUIからの設定はすべて`config.ini`ファイルに保存されます。このファイルは手動で編集することも可能です：
+GUIからの設定はすべて`config.json`ファイルに保存されます。このファイルは手動で編集することも可能です：
 
-```ini
-[Capture]
-window_title = Chrome
-change_threshold = 0.05
-capture_interval = 1.0
-
-[Notification]
-sound_file = resources/sounds/notification.wav
-
-[Processing]
-preprocessing_enabled = True
+```json
+{
+  "window_title": "Chrome",
+  "capture_interval": 1.0,
+  "diff_threshold": 0.05,
+  "diff_method": "ssim",
+  "notification_sound": true
+}
 ```
 
 ## 注意事項
