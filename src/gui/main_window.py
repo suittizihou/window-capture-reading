@@ -107,6 +107,9 @@ class MainWindow:
         self.status_var = tk.StringVar(value="停止中")
         self.diff_score_var = tk.StringVar(value="差分スコア: -")
 
+        # 差分検出方式表示用の変数を追加
+        self.algorithm_var = tk.StringVar(value="検出方式: -")
+
         # UIの作成
         self._create_ui()
 
@@ -149,7 +152,7 @@ class MainWindow:
         self.root.config(menu=menubar)
 
         # 以下設定を追加
-        self.root.option_add("*tearOff", False)  # tearOffメニューを無効化
+        self.root.option_add("tearOff", False)  # tearOffメニューを無効化
 
         # ファイルメニュー
         file_menu = tk.Menu(menubar, tearoff=0)
@@ -262,25 +265,34 @@ class MainWindow:
         # 差分表示キャンバス
         diff_frame = ttk.LabelFrame(right_panel, text="差分表示")
         diff_frame.grid(row=0, column=0, sticky="nsew")
-        diff_frame.grid_rowconfigure(1, weight=1)
+        diff_frame.grid_rowconfigure(2, weight=1)  # 差分キャンバス行に重みを設定
         diff_frame.grid_columnconfigure(0, weight=1)
+
+        # 状態表示エリア
+        status_area = ttk.Frame(diff_frame)
+        status_area.grid(row=0, column=0, sticky="ew", padx=5, pady=2)
+        status_area.grid_columnconfigure(0, weight=1)
 
         # 差分スコア表示
         self.diff_score_label = ttk.Label(
-            diff_frame, textvariable=self.diff_score_var, foreground="black"
+            status_area, textvariable=self.diff_score_var, foreground="black"
         )
-        self.diff_score_label.grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        self.diff_score_label.grid(row=0, column=0, sticky="w")
 
+        # 検出方式表示
+        self.algorithm_label = ttk.Label(
+            status_area, textvariable=self.algorithm_var, foreground="blue"
+        )
+        self.algorithm_label.grid(row=1, column=0, sticky="w")
+
+        # 差分キャンバスコンテナ
         self.diff_canvas_container = ttk.Frame(diff_frame)
-        self.diff_canvas_container.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        self.diff_canvas_container.grid(row=2, column=0, sticky="nsew", padx=5, pady=5)
         self.diff_canvas_container.grid_rowconfigure(0, weight=1)
         self.diff_canvas_container.grid_columnconfigure(0, weight=1)
 
         self.diff_canvas = DiffCanvas(self.diff_canvas_container, bg="black")
         self.diff_canvas.grid(row=0, column=0, sticky="nsew")
-        self.diff_canvas_container.grid_rowconfigure(
-            1, weight=0
-        )  # コントロールフレーム用
 
         # ウィンドウリストの初期化
         self._refresh_window_list()
@@ -474,6 +486,9 @@ class MainWindow:
             diff_method=self.config.diff_method,
         )
 
+        # 使用している検出方式を表示
+        self.algorithm_var.set(f"検出方式: {self.config.diff_method}")
+
         # スレッド起動前の状態設定
         self.capture_running = True
         self.stop_event.clear()
@@ -516,6 +531,9 @@ class MainWindow:
         # UI状態の更新
         self._update_ui_state()
         self.logger.info("キャプチャを停止しました")
+
+        # 検出方式表示をクリア
+        self.algorithm_var.set("検出方式: -")
 
         # ウィンドウサイズを維持
         self.target_width = current_width
