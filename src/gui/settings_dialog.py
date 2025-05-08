@@ -238,8 +238,9 @@ class SettingsDialog:
 
                     # 値表示ラベル
                     value_label = ttk.Label(frame, text=f"{current_value:.1f}%")
-                    value_label.grid(row=0, column=2, padx=5)
+                    value_label.grid(row=0, column=3, padx=5)
 
+                    # スライダー
                     scale = ttk.Scale(
                         frame,
                         from_=min_val,
@@ -249,20 +250,52 @@ class SettingsDialog:
                     )
                     scale.grid(row=0, column=1, sticky="e")
 
-                    def on_float_slider_change(
-                        event: tk.Event, lbl: ttk.Label, var: tk.DoubleVar
-                    ) -> None:
-                        value = var.get()
-                        lbl.config(text=f"{value:.1f}%")
+                    # Entry（数値入力）
+                    entry = ttk.Entry(frame, width=7)
+                    entry.grid(row=0, column=2, sticky="e")
 
-                    def make_float_slider_callback(
-                        lbl: ttk.Label, var: tk.DoubleVar
-                    ) -> Callable[[tk.Event], None]:
-                        return lambda e: on_float_slider_change(e, lbl, var)
+                    # Entryのバリデーション
+                    def validate_float_entry(action: str, value: str) -> bool:
+                        if action == "1":  # 挿入時
+                            try:
+                                if value == "":
+                                    return True
+                                float_val = float(value)
+                                return min_val <= float_val <= max_val
+                            except ValueError:
+                                return False
+                        return True
 
-                    callback = make_float_slider_callback(value_label, dbl_var)
-                    scale.bind("<Motion>", callback)
-                    scale.bind("<ButtonRelease-1>", callback)
+                    vcmd = (frame.register(validate_float_entry), "%d", "%P")
+                    entry.configure(validate="key", validatecommand=vcmd)
+
+                    # EntryとDoubleVarの同期
+                    def on_var_changed(*args: object) -> None:
+                        value = dbl_var.get()
+                        entry.delete(0, tk.END)
+                        entry.insert(0, f"{value:.1f}")
+                        value_label.config(text="%")
+
+                    def on_entry_changed(event: tk.Event) -> None:
+                        try:
+                            value = float(entry.get())
+                            if min_val <= value <= max_val:
+                                dbl_var.set(value)
+                        except ValueError:
+                            pass  # 無効な値は無視
+
+                    # DoubleVarが変わったときにEntryとラベルを更新
+                    dbl_var.trace_add("write", lambda *args: on_var_changed())
+                    # EntryでEnter押下またはフォーカスアウト時にDoubleVarを更新
+                    entry.bind("<Return>", on_entry_changed)
+                    entry.bind("<FocusOut>", on_entry_changed)
+
+                    # 初期値反映
+                    entry.delete(0, tk.END)
+                    entry.insert(0, f"{dbl_var.get():.1f}")
+                    value_label.config(text="%")
+
+                    # スライダーの動きでラベル・Entryも更新（traceで十分なのでbindは不要）
                 else:
                     ttk.Entry(frame, textvariable=dbl_var).grid(
                         row=0, column=1, sticky="e"
