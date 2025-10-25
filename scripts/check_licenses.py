@@ -26,15 +26,22 @@ def check_pip_licenses_installed():
     try:
         # pip-licensesをPythonモジュールとして実行してチェック
         # Windowsでも動作するようにpython -m piplicensesを使用
-        subprocess.run(
+        result = subprocess.run(
             [sys.executable, "-m", "piplicenses", "--version"],
             capture_output=True,
-            check=True
+            text=True
         )
-        return True
-    except (subprocess.SubprocessError, FileNotFoundError):
+        if result.returncode == 0:
+            return True
+        else:
+            print("pip-licensesがインストールされていません。以下のコマンドでインストールしてください：")
+            print("pip install pip-licenses")
+            print(f"エラー: {result.stderr}")
+            return False
+    except Exception as e:
         print("pip-licensesがインストールされていません。以下のコマンドでインストールしてください：")
         print("pip install pip-licenses")
+        print(f"エラー: {e}")
         return False
 
 
@@ -43,11 +50,20 @@ def get_licenses_data():
     # Pythonモジュールとして実行（Windows環境でも動作）
     cmd = [sys.executable, "-m", "piplicenses", "--format=json", "--with-system", "--with-urls"]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"エラー: ライセンス情報の取得に失敗しました")
+            print(f"コマンド: {' '.join(cmd)}")
+            print(f"戻り値: {result.returncode}")
+            print(f"エラー出力: {result.stderr}")
+            sys.exit(1)
         return json.loads(result.stdout)
-    except subprocess.CalledProcessError as e:
-        print(f"エラー: ライセンス情報の取得に失敗しました: {e}")
-        print(f"エラー出力: {e.stderr}")
+    except json.JSONDecodeError as e:
+        print(f"エラー: ライセンス情報のJSON解析に失敗しました: {e}")
+        print(f"出力: {result.stdout[:500]}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"エラー: 予期しないエラーが発生しました: {e}")
         sys.exit(1)
 
 
