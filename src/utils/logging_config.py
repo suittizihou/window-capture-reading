@@ -1,5 +1,6 @@
 import logging
 import sys
+from typing import List
 
 
 def setup_logging() -> None:
@@ -15,6 +16,7 @@ def setup_logging() -> None:
     # ログフォーマット
     log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 
+    handlers: List[logging.Handler]
     if is_frozen:
         # 製品ビルド: INFOレベル、ファイル出力のみ
         handlers = [

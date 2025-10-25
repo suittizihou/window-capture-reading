@@ -561,11 +561,10 @@ class MainWindow:
             try:
                 self.logger.debug("WindowCaptureオブジェクトをクリーンアップ中...")
                 self.window_capture.stop()
-                # 明示的に削除
-                old_capture = self.window_capture
+                # 明示的に削除してガベージコレクションを強制実行
+                temp_capture = self.window_capture  # noqa: F841
                 self.window_capture = None
-                del old_capture
-                # ガベージコレクションを強制実行
+                del temp_capture  # 参照を削除してガベージコレクションを促進
                 gc.collect()
                 self.logger.debug("WindowCaptureオブジェクトをクリーンアップしました")
             except Exception as e:

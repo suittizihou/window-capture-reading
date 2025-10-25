@@ -217,7 +217,7 @@ def test_lazy_initialization_on_capture(mock_windows_capture: MagicMock) -> None
     assert capture.capture_started is False
 
     # capture()呼び出しで初期化される
-    result = capture.capture()
+    capture.capture()
 
     # 初期化が実行された
     mock_windows_capture.assert_called_once_with(

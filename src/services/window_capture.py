@@ -10,7 +10,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 try:
-    from windows_capture import WindowsCapture, Frame, InternalCaptureControl
+    from windows_capture import WindowsCapture, Frame, InternalCaptureControl  # type: ignore
 except ImportError as e:
     raise ImportError(
         "windows-captureライブラリがインストールされていません。"
