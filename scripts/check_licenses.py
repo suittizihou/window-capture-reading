@@ -14,6 +14,12 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+# Windows環境でUTF-8エンコーディングを強制的に使用
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 
 def check_pip_licenses_installed():
     """pip-licensesがインストールされているか確認する"""

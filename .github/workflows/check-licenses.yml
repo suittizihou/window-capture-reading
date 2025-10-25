@@ -38,6 +38,9 @@ jobs:
     - name: Run license check
       run: |
         python scripts/check_licenses.py
+      env:
+        PYTHONIOENCODING: utf-8
+        PYTHONUTF8: 1
         
     - name: Upload LICENSES.md as artifact
       uses: actions/upload-artifact@v4
