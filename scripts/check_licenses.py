@@ -46,9 +46,21 @@ def check_pip_licenses_installed():
 
 
 def get_licenses_data():
-    """pip-licensesを使用してライセンス情報を取得する"""
+    """pip-licensesを使用してライセンス情報を取得する
+
+    システムパッケージ（pip, setuptools, wheel）は除外し、
+    実行時依存関係のみをチェックします。
+    これにより、CI環境とローカル環境でのpipバージョン差異による
+    誤検知を防ぎます。
+    """
     # Pythonモジュールとして実行（Windows環境でも動作）
-    cmd = [sys.executable, "-m", "piplicenses", "--format=json", "--with-system", "--with-urls"]
+    # --with-systemを削除し、システムパッケージを明示的に除外
+    cmd = [
+        sys.executable, "-m", "piplicenses",
+        "--format=json",
+        "--with-urls",
+        "--ignore-packages", "pip", "setuptools", "wheel"
+    ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:

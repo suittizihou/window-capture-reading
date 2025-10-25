@@ -61,15 +61,12 @@
 | isort | 5.13.2 | [https://pycqa.github.io/isort/](https://pycqa.github.io/isort/) |
 | mccabe | 0.7.0 | [https://github.com/pycqa/mccabe](https://github.com/pycqa/mccabe) |
 | mypy | 1.9.0 | [https://www.mypy-lang.org/](https://www.mypy-lang.org/) |
-| pip | 25.1.1 | [https://pip.pypa.io/](https://pip.pypa.io/) |
-| pip-licenses | 4.3.3 | [https://github.com/raimon49/pip-licenses](https://github.com/raimon49/pip-licenses) |
 | platformdirs | 4.5.0 | [https://github.com/tox-dev/platformdirs](https://github.com/tox-dev/platformdirs) |
 | pluggy | 1.6.0 | [UNKNOWN](UNKNOWN) |
 | pycodestyle | 2.11.1 | [https://pycodestyle.pycqa.org/](https://pycodestyle.pycqa.org/) |
 | pyflakes | 3.2.0 | [https://github.com/PyCQA/pyflakes](https://github.com/PyCQA/pyflakes) |
 | pytest | 8.0.2 | [https://docs.pytest.org/en/latest/](https://docs.pytest.org/en/latest/) |
 | pytest-cov | 4.1.0 | [https://github.com/pytest-dev/pytest-cov](https://github.com/pytest-dev/pytest-cov) |
-| wcwidth | 0.2.14 | [https://github.com/jquast/wcwidth](https://github.com/jquast/wcwidth) |
 | windows-capture | 1.5.0 | [UNKNOWN](UNKNOWN) |
 
 ### Mozilla Public License 2.0 (MPL 2.0) {#mozilla-public-license-20-(mpl-20)} 
@@ -86,7 +83,5 @@
 | iniconfig | 2.3.0 | [https://github.com/pytest-dev/iniconfig](https://github.com/pytest-dev/iniconfig) |
 | mypy_extensions | 1.1.0 | [https://github.com/python/mypy_extensions](https://github.com/python/mypy_extensions) |
 | pillow | 12.0.0 | [https://python-pillow.github.io](https://python-pillow.github.io) |
-| prettytable | 3.16.0 | [https://github.com/prettytable/prettytable](https://github.com/prettytable/prettytable) |
-| setuptools | 80.3.1 | [https://github.com/pypa/setuptools](https://github.com/pypa/setuptools) |
 | typing_extensions | 4.15.0 | [https://github.com/python/typing_extensions](https://github.com/python/typing_extensions) |
 

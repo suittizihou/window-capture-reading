@@ -1,27 +1,12 @@
-﻿# Image processing
-Pillow>=9.0
-opencv-python>=4.5
-numpy<2.0.0
-scikit-image>=0.19.0
+# Runtime dependencies for Window Capture Reading
+# These are the packages required to run the application
+# All versions are pinned for reproducibility and license stability
+
+# Image processing
+Pillow==12.0.0
+opencv-python==4.11.0.86
+numpy==1.26.4
+scikit-image==0.25.2
 
 # Windows screen capture
-windows-capture>=1.5.0
-
-# Environment variables
-# python-dotenv==1.0.1
-
-# Type checking
-mypy==1.9.0
-types-Pillow==10.2.0.20240324
-
-# Testing
-pytest==8.0.2
-pytest-cov==4.1.0
-
-# Linting
-black==24.2.0
-isort==5.13.2
-flake8==7.0.0
-
-# 開発ツール
-pip-licenses==4.3.3  # ライセンス管理用
+windows-capture==1.5.0

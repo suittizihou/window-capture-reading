@@ -14,9 +14,18 @@ Window Capture Reading is a Windows application that captures specified windows 
 python -m venv venv
 .\venv\Scripts\Activate
 
-# Install dependencies
+# Install runtime dependencies only
 pip install -r requirements.txt
+
+# Install development dependencies (includes runtime dependencies)
+pip install -r requirements-dev.txt
 ```
+
+**Dependency Management:**
+- `requirements.txt`: Runtime dependencies only (pinned versions for reproducibility)
+- `requirements-dev.txt`: Development tools (testing, linting, type checking) + runtime dependencies
+- All versions are pinned for stable builds and consistent license reporting
+- System packages (pip, setuptools, wheel) are excluded from license checks
 
 ### Running the Application
 ```powershell
