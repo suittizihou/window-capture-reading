@@ -119,12 +119,16 @@ def test_stop(mock_windows_capture: MagicMock) -> None:
 
     mock_instance.event = mock_event
 
+    # capture_controlのモック（start_free_threaded()の戻り値）
+    mock_capture_control = MagicMock()
+    mock_instance.start_free_threaded.return_value = mock_capture_control
+
     capture = WindowCapture("Test Window")
     # 初期化を実行
     capture._initialize_capture()
     capture.stop()
 
-    mock_instance.stop.assert_called_once()
+    mock_capture_control.stop.assert_called_once()
     assert capture.capture_started is False
 
 
@@ -183,12 +187,16 @@ def test_destructor(mock_windows_capture: MagicMock) -> None:
 
     mock_instance.event = mock_event
 
+    # capture_controlのモック（start_free_threaded()の戻り値）
+    mock_capture_control = MagicMock()
+    mock_instance.start_free_threaded.return_value = mock_capture_control
+
     capture = WindowCapture("Test Window")
     # 初期化を実行
     capture._initialize_capture()
     capture.__del__()
 
-    mock_instance.stop.assert_called()
+    mock_capture_control.stop.assert_called()
 
 
 @patch("src.services.window_capture.WindowsCapture")
@@ -213,7 +221,7 @@ def test_lazy_initialization_on_capture(mock_windows_capture: MagicMock) -> None
 
     # 初期化が実行された
     mock_windows_capture.assert_called_once_with(
-        window_name="Test Window", cursor_capture=None, draw_border=None
+        window_name="Test Window", cursor_capture=False, draw_border=False
     )
     mock_instance.start_free_threaded.assert_called_once()
     assert capture.capture_started is True
