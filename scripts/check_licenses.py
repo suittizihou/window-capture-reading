@@ -24,8 +24,13 @@ if sys.platform == "win32":
 def check_pip_licenses_installed():
     """pip-licensesがインストールされているか確認する"""
     try:
-        # pip-licensesコマンドが使用可能かチェック
-        subprocess.run(["pip-licenses", "--version"], capture_output=True, check=True)
+        # pip-licensesをPythonモジュールとして実行してチェック
+        # Windowsでも動作するようにpython -m piplicensesを使用
+        subprocess.run(
+            [sys.executable, "-m", "piplicenses", "--version"],
+            capture_output=True,
+            check=True
+        )
         return True
     except (subprocess.SubprocessError, FileNotFoundError):
         print("pip-licensesがインストールされていません。以下のコマンドでインストールしてください：")
@@ -35,7 +40,8 @@ def check_pip_licenses_installed():
 
 def get_licenses_data():
     """pip-licensesを使用してライセンス情報を取得する"""
-    cmd = ["pip-licenses", "--format=json", "--with-system", "--with-urls"]
+    # Pythonモジュールとして実行（Windows環境でも動作）
+    cmd = [sys.executable, "-m", "piplicenses", "--format=json", "--with-system", "--with-urls"]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return json.loads(result.stdout)
