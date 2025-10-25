@@ -74,7 +74,7 @@ jobs:
 
       - name: EXEビルド
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name WindowCaptureReading --add-data "src;src" --add-data "resources;resources" src/gui_main.py --distpath dist
+          pyinstaller WindowCaptureReading.spec
 
       - name: リリース作成とEXEファイルアップロード
         uses: softprops/action-gh-release@v2

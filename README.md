@@ -44,11 +44,7 @@ pip install -r requirements.txt
 ### 開発時（Pythonから起動）
 
 ```powershell
-# 通常起動
 python -m src.main
-
-# ウィンドウタイトルを指定して起動
-python -m src.main --window-title "LDPlayer"
 ```
 
 ### EXE版を使用する場合

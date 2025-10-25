@@ -6,14 +6,12 @@
 import logging
 import threading
 import time
-import argparse
-from typing import Optional, Dict, Any, List, Tuple, cast
-from PIL import Image
+from typing import Optional, Any, List
 import numpy as np
 from numpy.typing import NDArray
 from src.services.window_capture import WindowCapture
 from src.services.difference_detector import DifferenceDetector
-from src.utils.config import Config, get_config
+from src.utils.config import get_config
 from src.utils.logging_config import setup_logging
 
 # 画像処理関連の型定義
@@ -95,13 +93,6 @@ def main() -> None:
     """アプリケーションのエントリーポイント。"""
     # ロギングの設定
     setup_logging()
-
-    # コマンドライン引数の解析
-    parser = argparse.ArgumentParser(description="Window Capture Reading")
-    parser.add_argument(
-        "--window-title", "-w", help="キャプチャ対象のウィンドウタイトル", default=None
-    )
-    args = parser.parse_args()
 
     # GUIモードで起動
     from src.gui import start_gui
