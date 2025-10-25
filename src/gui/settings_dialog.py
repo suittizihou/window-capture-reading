@@ -98,6 +98,18 @@ class SettingsDialog:
                 "default": 1.0,
             },
             {
+                "key": "draw_border",
+                "label": "キャプチャ時に枠を表示",
+                "type": "bool",
+                "default": False,
+            },
+            {
+                "key": "cursor_capture",
+                "label": "マウスカーソルをキャプチャ",
+                "type": "bool",
+                "default": False,
+            },
+            {
                 "key": "diff_threshold",
                 "label": "差分検出閾値(%)",
                 "type": "float",

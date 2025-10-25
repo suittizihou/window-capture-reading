@@ -10,6 +10,7 @@ import threading
 import queue
 import datetime
 import logging
+import gc
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from typing import Dict, Any, List, Optional, Tuple, Callable, cast, Union, TypeVar
@@ -528,6 +529,19 @@ class MainWindow:
             except queue.Empty:
                 break
 
+        # スレッドの終了を待つ
+        if self.capture_thread and self.capture_thread.is_alive():
+            self.logger.debug("キャプチャスレッドの終了を待機中...")
+            self.capture_thread.join(timeout=3.0)
+            if self.capture_thread.is_alive():
+                self.logger.warning("キャプチャスレッドが3秒以内に終了しませんでした")
+
+        if self.diff_detection_thread and self.diff_detection_thread.is_alive():
+            self.logger.debug("差分検出スレッドの終了を待機中...")
+            self.diff_detection_thread.join(timeout=3.0)
+            if self.diff_detection_thread.is_alive():
+                self.logger.warning("差分検出スレッドが3秒以内に終了しませんでした")
+
         # UI状態の更新
         self._update_ui_state()
         self.logger.info("キャプチャを停止しました")
@@ -540,6 +554,22 @@ class MainWindow:
         self.target_height = current_height
         # サイズチェックは継続するが頻度を下げる
         self.root.update_idletasks()
+
+    def _safe_cleanup_window_capture(self) -> None:
+        """WindowCaptureオブジェクトを安全にクリーンアップします。"""
+        if self.window_capture is not None:
+            try:
+                self.logger.debug("WindowCaptureオブジェクトをクリーンアップ中...")
+                self.window_capture.stop()
+                # 明示的に削除
+                old_capture = self.window_capture
+                self.window_capture = None
+                del old_capture
+                # ガベージコレクションを強制実行
+                gc.collect()
+                self.logger.debug("WindowCaptureオブジェクトをクリーンアップしました")
+            except Exception as e:
+                self.logger.error(f"WindowCaptureのクリーンアップ中にエラー: {e}", exc_info=True)
 
     def _update_preview(self, img: Image.Image) -> None:
         """プレビューキャンバスを更新する関数。
@@ -588,8 +618,13 @@ class MainWindow:
         window_title = self.window_title_var.get()
 
         try:
+            # 古いWindowCaptureオブジェクトをクリーンアップ
+            self._safe_cleanup_window_capture()
+
             # ウィンドウキャプチャの初期化
-            self.window_capture = WindowCapture(window_title)
+            self.window_capture = WindowCapture(
+                window_title, self.config.draw_border, self.config.cursor_capture
+            )
 
             while not self.stop_event.is_set():
                 try:
@@ -643,8 +678,12 @@ class MainWindow:
             err = e  # 変数をキャプチャするためのローカル変数
             self.root.after(0, lambda: self._show_error(err))
             self.root.after(0, self._stop_capture)
-
-        self.logger.debug("キャプチャループを終了します")
+        finally:
+            # クリーンアップ: WindowCaptureを確実に停止
+            if self.window_capture is not None:
+                self.logger.debug("キャプチャスレッド内でWindowCaptureを停止します")
+                self.window_capture.stop()
+            self.logger.debug("キャプチャループを終了します")
 
     def _diff_detection_loop(self) -> None:
         """差分検出ループを実行します。"""
@@ -797,6 +836,9 @@ class MainWindow:
                 return
             self.on_stop()
 
+        # WindowCaptureオブジェクトを完全にクリーンアップ
+        self._safe_cleanup_window_capture()
+
         self.root.quit()
 
     def run(self) -> None:
@@ -814,15 +856,47 @@ class MainWindow:
             self.config.window_title = selected_title
             self.config.save()
 
-            try:
-                # ウィンドウキャプチャの初期化
-                self.window_capture = WindowCapture(selected_title)
+            # キャプチャ実行中の場合は再起動
+            if self.capture_running:
+                self.logger.info(f"キャプチャ実行中のため、新しいウィンドウで再起動します: {selected_title}")
+                self.on_stop()  # スレッドの終了を待つ
+                self.on_start()  # 即座に再起動
+                return
 
-                # キャプチャ実行
-                frame = self.window_capture.capture()
+            try:
+                # 古いWindowCaptureオブジェクトをクリーンアップ
+                self._safe_cleanup_window_capture()
+
+                # ウィンドウキャプチャの初期化
+                self.window_capture = WindowCapture(
+                    selected_title, self.config.draw_border, self.config.cursor_capture
+                )
+
+                # フレーム到着を待つ（最大3秒、10回リトライ）
+                max_retries = 10
+                retry_delay = 0.3  # 300ms
+                frame = None
+
+                for attempt in range(max_retries):
+                    frame = self.window_capture.capture()
+                    if frame is not None:
+                        break
+
+                    if attempt < max_retries - 1:
+                        self.logger.debug(
+                            f"フレーム待機中... ({attempt + 1}/{max_retries})"
+                        )
+                        time.sleep(retry_delay)
+
                 if frame is None:
+                    self.logger.error(
+                        f"ウィンドウ '{selected_title}' のキャプチャに失敗しました。"
+                        f"フレームが{max_retries * retry_delay}秒以内に到着しませんでした。"
+                    )
                     messagebox.showerror(
-                        "エラー", "ウィンドウのキャプチャに失敗しました。"
+                        "エラー",
+                        f"ウィンドウ '{selected_title}' のキャプチャに失敗しました。\n"
+                        f"ウィンドウが表示されているか確認してください。",
                     )
                     return
 

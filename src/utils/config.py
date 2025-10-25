@@ -40,6 +40,8 @@ class Config:
     # ウィンドウ設定
     window_title: str = ""
     capture_interval: float = 1.0
+    draw_border: bool = False  # キャプチャ時の枠表示
+    cursor_capture: bool = False  # マウスカーソルをキャプチャ
 
     # 差分検出設定
     diff_threshold: float = 0.05
