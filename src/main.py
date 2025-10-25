@@ -101,28 +101,12 @@ def main() -> None:
     parser.add_argument(
         "--window-title", "-w", help="キャプチャ対象のウィンドウタイトル", default=None
     )
-    parser.add_argument(
-        "--no-gui",
-        "-n",
-        help="GUIを使用せずにコマンドラインモードで実行",
-        action="store_true",
-    )
     args = parser.parse_args()
 
-    if args.no_gui:
-        # コマンドラインモード
-        event = threading.Event()
-        event.set()
-        try:
-            run_main_loop(event)
-        except KeyboardInterrupt:
-            logging.info("Ctrl+Cが押されました。終了します...")
-            event.clear()
-    else:
-        # GUIモード
-        from src.gui import start_gui
+    # GUIモードで起動
+    from src.gui import start_gui
 
-        start_gui()
+    start_gui()
 
 
 if __name__ == "__main__":

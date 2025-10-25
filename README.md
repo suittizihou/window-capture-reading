@@ -41,8 +41,24 @@ pip install -r requirements.txt
 
 ## 起動方法
 
+### 開発時（Pythonから起動）
+
 ```powershell
-python -m src.gui_main
+# 通常起動
+python -m src.main
+
+# ウィンドウタイトルを指定して起動
+python -m src.main --window-title "LDPlayer"
+```
+
+### EXE版を使用する場合
+
+```powershell
+# EXEを起動
+.\dist\WindowCaptureReading.exe
+
+# EXEを再ビルド
+pyinstaller WindowCaptureReading.spec
 ```
 
 - ウィンドウタイトルは`config.json`で指定（例：LDPlayer, Chrome など）
