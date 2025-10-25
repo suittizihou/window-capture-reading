@@ -1,204 +1,177 @@
 """ウィンドウキャプチャ機能を提供するモジュール。
 
-Win32 APIを使用して、指定されたウィンドウのキャプチャを行います。
+Windows.Graphics.Capture APIを使用して、指定されたウィンドウのキャプチャを行います。
 """
 
 import logging
-from ctypes import (
-    windll,
-    byref,
-    c_ubyte,
-    Array,
-    Structure,
-    c_long,
-    c_ulong,
-    c_void_p,
-    c_ushort,
-    sizeof,
-)
-from ctypes.wintypes import BOOL, HWND, HDC, RECT
-from typing import Optional, Tuple, Any, cast
+import threading
+from typing import Optional, cast, Any
 import numpy as np
 from numpy.typing import NDArray
-import cv2
-from PIL import Image
+
+try:
+    from windows_capture import WindowsCapture, Frame, InternalCaptureControl
+except ImportError as e:
+    raise ImportError(
+        "windows-captureライブラリがインストールされていません。"
+        "pip install windows-capture を実行してください。"
+    ) from e
 
 # 画像処理関連の型定義
 ImageArray = NDArray[np.uint8]
 
 
 class WindowCapture:
-    """ウィンドウキャプチャ機能を提供するクラス。"""
+    """ウィンドウキャプチャ機能を提供するクラス。
 
-    def __init__(self, window_title: str) -> None:
+    Windows.Graphics.Capture APIを使用して、指定されたウィンドウタイトルの
+    ウィンドウをキャプチャします。イベント駆動型でバックグラウンドで
+    キャプチャを実行し、最新のフレームを保持します。
+    """
+
+    def __init__(self, window_title: str, draw_border: bool = False, cursor_capture: bool = False) -> None:
         """ウィンドウキャプチャクラスを初期化します。
 
         Args:
             window_title: キャプチャ対象のウィンドウタイトル
+            draw_border: キャプチャ時に枠を表示するか（デフォルト: False）
+            cursor_capture: マウスカーソルをキャプチャするか（デフォルト: False）
         """
         self.window_title = window_title
+        self.draw_border = draw_border
+        self.cursor_capture = cursor_capture
         self.logger = logging.getLogger(__name__)
 
-        # Win32 APIの関数を取得
-        self.user32 = windll.user32
-        self.gdi32 = windll.gdi32
+        # 最新フレームを保存するための変数
+        self.latest_frame: Optional[ImageArray] = None
+        self.frame_lock = threading.Lock()
+        self.capture_started = False
+        self.capture_failed = False
+        self.win_capture: Optional[WindowsCapture] = None
+        self.capture_control: Optional[Any] = None  # CaptureControlを保存
+        self.initialization_attempted = False
 
-    def find_window(self) -> Optional[HWND]:
-        """指定されたタイトルのウィンドウハンドルを取得します。
-
-        Returns:
-            ウィンドウハンドル。見つからない場合はNone。
-        """
-        try:
-            hwnd = self.user32.FindWindowW(None, self.window_title)
-            if not hwnd:
-                self.logger.warning(f"ウィンドウが見つかりません: {self.window_title}")
-                return None
-            return cast(HWND, hwnd)
-        except Exception as e:
-            self.logger.error(f"ウィンドウの検索中にエラー: {e}")
-            return None
-
-    def get_window_rect(self, hwnd: HWND) -> Optional[Tuple[int, int, int, int]]:
-        """ウィンドウの位置とサイズを取得します。
-
-        Args:
-            hwnd: ウィンドウハンドル
+    def _initialize_capture(self) -> bool:
+        """WindowsCaptureを初期化します（遅延初期化）。
 
         Returns:
-            (x, y, width, height)のタプル。取得失敗時はNone。
+            初期化が成功した場合はTrue、失敗した場合はFalse
         """
+        if self.capture_started:
+            return True
+
+        if self.initialization_attempted and self.capture_failed:
+            # 以前に初期化を試みて失敗している場合はスキップ
+            return False
+
+        self.initialization_attempted = True
+
         try:
-            rect = RECT()
-            if not self.user32.GetWindowRect(hwnd, byref(rect)):
-                self.logger.error("ウィンドウの位置とサイズの取得に失敗しました")
-                return None
-            return (rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top)
-        except Exception as e:
-            self.logger.error(f"ウィンドウの位置とサイズの取得中にエラー: {e}")
-            return None
-
-    def capture(self) -> Optional[ImageArray]:
-        """ウィンドウをキャプチャします。
-
-        Returns:
-            キャプチャした画像。失敗時はNone。
-        """
-        try:
-            # ウィンドウハンドルを取得
-            hwnd = self.find_window()
-            if not hwnd:
-                return None
-
-            # ウィンドウの位置とサイズを取得
-            rect = self.get_window_rect(hwnd)
-            if not rect:
-                return None
-            x, y, width, height = rect
-
-            # ウィンドウのDCを取得
-            hwnd_dc = self.user32.GetDC(hwnd)
-            if not hwnd_dc:
-                self.logger.error("ウィンドウのDC取得に失敗しました")
-                return None
-
-            # 互換DCを作成
-            mfc_dc = self.gdi32.CreateCompatibleDC(hwnd_dc)
-            if not mfc_dc:
-                self.user32.ReleaseDC(hwnd, hwnd_dc)
-                self.logger.error("互換DC作成に失敗しました")
-                return None
-
-            # ビットマップを作成
-            save_bit = self.gdi32.CreateCompatibleBitmap(hwnd_dc, width, height)
-            if not save_bit:
-                self.gdi32.DeleteDC(mfc_dc)
-                self.user32.ReleaseDC(hwnd, hwnd_dc)
-                self.logger.error("ビットマップ作成に失敗しました")
-                return None
-
-            # ビットマップを選択
-            self.gdi32.SelectObject(mfc_dc, save_bit)
-
-            # 画面をコピー
-            self.gdi32.BitBlt(
-                mfc_dc, 0, 0, width, height, hwnd_dc, 0, 0, 0x00CC0020
-            )  # SRCCOPY
-
-            # ビットマップ情報を取得
-            bmp_info = self._create_bitmap_info(width, height)
-            if not bmp_info:
-                self.gdi32.DeleteObject(save_bit)
-                self.gdi32.DeleteDC(mfc_dc)
-                self.user32.ReleaseDC(hwnd, hwnd_dc)
-                return None
-
-            # 画像データを取得
-            image_data = np.zeros((height, width, 4), dtype=np.uint8)
-            self.gdi32.GetDIBits(
-                mfc_dc,
-                save_bit,
-                0,
-                height,
-                image_data.ctypes.data_as(c_void_p),
-                bmp_info,
-                0,
+            self.win_capture = WindowsCapture(
+                window_name=self.window_title,
+                cursor_capture=self.cursor_capture,
+                draw_border=self.draw_border,
             )
 
-            # リソースを解放
-            self.gdi32.DeleteObject(save_bit)
-            self.gdi32.DeleteDC(mfc_dc)
-            self.user32.ReleaseDC(hwnd, hwnd_dc)
+            # イベントハンドラーの設定
+            @self.win_capture.event
+            def on_frame_arrived(
+                frame: Frame, capture_control: InternalCaptureControl
+            ) -> None:
+                """フレームが到着したときに呼び出されるイベントハンドラー。
 
-            # BGRAからBGRに変換
-            image_data_bgr = cv2.cvtColor(image_data, cv2.COLOR_BGRA2BGR)
+                Args:
+                    frame: キャプチャされたフレーム
+                    capture_control: キャプチャ制御オブジェクト
+                """
+                try:
+                    # BGRに変換してフレームを取得
+                    # convert_to_bgr()はBGRA (H, W, 4) から BGR (H, W, 3) に変換
+                    bgr_frame = frame.convert_to_bgr()
+                    frame_data = bgr_frame.frame_buffer
 
-            return cast(ImageArray, image_data_bgr)
+                    if frame_data is not None and len(frame_data.shape) == 3:
+                        with self.frame_lock:
+                            self.latest_frame = cast(ImageArray, frame_data.copy())
+                            self.capture_failed = False
+                except Exception as e:
+                    self.logger.error(f"フレーム処理中にエラー: {e}", exc_info=True)
+                    with self.frame_lock:
+                        self.capture_failed = True
+
+            @self.win_capture.event
+            def on_closed() -> None:
+                """キャプチャセッションが閉じられたときに呼び出されるイベントハンドラー。"""
+                self.logger.info("キャプチャセッションが閉じられました")
+                with self.frame_lock:
+                    self.capture_started = False
+
+            # キャプチャを開始し、CaptureControlを保存
+            self.capture_control = self.win_capture.start_free_threaded()
+            self.capture_started = True
+            self.capture_failed = False
+            self.logger.info(f"ウィンドウ '{self.window_title}' のキャプチャを開始しました")
+            return True
 
         except Exception as e:
-            self.logger.error(f"画面キャプチャ中にエラー: {e}")
-            return None
+            self.logger.warning(
+                f"ウィンドウ '{self.window_title}' が見つかりません。"
+                f"ウィンドウが開いているか確認してください。"
+            )
+            self.logger.debug(f"詳細なエラー情報: {e}", exc_info=True)
+            self.capture_failed = True
+            return False
 
-    def _create_bitmap_info(self, width: int, height: int) -> Optional[Any]:
-        """ビットマップ情報構造体を作成します。
+    def find_window(self) -> Optional[int]:
+        """指定されたタイトルのウィンドウハンドルを取得します。
 
-        Args:
-            width: 画像の幅
-            height: 画像の高さ
+        注: この メソッドは互換性のために残されていますが、
+        windows-captureライブラリが内部でウィンドウ検索を行うため、
+        直接使用する必要はありません。
 
         Returns:
-            ビットマップ情報構造体。作成失敗時はNone。
+            ウィンドウが見つかった場合は1、それ以外は None。
         """
-        try:
+        if self.capture_started and not self.capture_failed:
+            return 1
+        return None
 
-            class BITMAPINFOHEADER(Structure):
-                _fields_ = [
-                    ("biSize", c_ulong),
-                    ("biWidth", c_long),
-                    ("biHeight", c_long),
-                    ("biPlanes", c_ushort),
-                    ("biBitCount", c_ushort),
-                    ("biCompression", c_ulong),
-                    ("biSizeImage", c_ulong),
-                    ("biXPelsPerMeter", c_long),
-                    ("biYPelsPerMeter", c_long),
-                    ("biClrUsed", c_ulong),
-                    ("biClrImportant", c_ulong),
-                ]
+    def capture(self) -> Optional[ImageArray]:
+        """最新のキャプチャフレームを取得します。
 
-            class BITMAPINFO(Structure):
-                _fields_ = [("bmiHeader", BITMAPINFOHEADER)]
+        初回呼び出し時にキャプチャを初期化します（遅延初期化）。
 
-            # ビットマップ情報を設定
-            bmp_info = BITMAPINFO()
-            bmp_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER)
-            bmp_info.bmiHeader.biWidth = width
-            bmp_info.bmiHeader.biHeight = -height  # トップダウン
-            bmp_info.bmiHeader.biPlanes = 1
-            bmp_info.bmiHeader.biBitCount = 32
-            bmp_info.bmiHeader.biCompression = 0  # BI_RGB
-            return bmp_info
+        Returns:
+            キャプチャした画像（BGR形式のnumpy配列）。失敗時はNone。
+        """
+        # 初期化がまだの場合は初期化を試みる
+        if not self.capture_started:
+            if not self._initialize_capture():
+                return None
 
-        except Exception as e:
-            self.logger.error(f"ビットマップ情報構造体の作成中にエラー: {e}")
-            return None
+        with self.frame_lock:
+            if self.capture_failed:
+                return None
+
+            if self.latest_frame is None:
+                # まだフレームが到着していない
+                return None
+
+            # コピーを返す（スレッドセーフのため）
+            return self.latest_frame.copy()
+
+    def stop(self) -> None:
+        """キャプチャを停止します。"""
+        if self.capture_started and self.capture_control is not None:
+            try:
+                self.capture_control.stop()
+                self.capture_started = False
+                self.logger.info(
+                    f"ウィンドウ '{self.window_title}' のキャプチャを停止しました"
+                )
+            except Exception as e:
+                self.logger.error(f"キャプチャの停止中にエラー: {e}", exc_info=True)
+
+    def __del__(self) -> None:
+        """デストラクタ。クリーンアップ処理を実行します。"""
+        self.stop()

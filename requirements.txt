@@ -4,6 +4,9 @@ opencv-python>=4.5
 numpy<2.0.0
 scikit-image>=0.19.0
 
+# Windows screen capture
+windows-capture>=1.5.0
+
 # Environment variables
 # python-dotenv==1.0.1
 
