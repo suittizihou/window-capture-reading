@@ -72,7 +72,6 @@ def generate_markdown(license_groups):
     
     with open(output_path, "w", encoding="utf-8") as f:
         f.write("# サードパーティライセンス\n\n")
-        f.write(f"*生成日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n\n")
         f.write("このプロジェクトは以下のオープンソースソフトウェアを使用しています。\n\n")
         
         f.write("## 目次\n\n")
