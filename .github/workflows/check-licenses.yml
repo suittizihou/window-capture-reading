@@ -56,6 +56,13 @@ jobs:
         if ($LASTEXITCODE -eq 0) {
           Write-Output "ライセンス情報に変更はありません。"
         } else {
-          Write-Output "::warning::ライセンス情報に変更があります。最新のライセンス情報はartifactからダウンロード可能です。"
-          Write-Output "詳細な変更はartifactで確認してください"
+          Write-Output "::error::ライセンス情報に変更があります。LICENSES.mdを更新してコミットしてください。"
+          Write-Output ""
+          Write-Output "変更内容:"
+          git diff --staged LICENSES.md
+          Write-Output ""
+          Write-Output "詳細な変更内容はartifactからダウンロード可能です。"
+          Write-Output ""
+          Write-Output "修正方法: python scripts/check_licenses.py を実行してLICENSES.mdを更新してください"
+          exit 1
         } 
