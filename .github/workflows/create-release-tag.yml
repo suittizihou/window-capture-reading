@@ -158,33 +158,22 @@ jobs:
           echo "::error::タグ '${{ steps.decide_tag.outputs.tag_to_use }}' は既に存在します。別のタグ名を選択してください。"
           exit 1
       
-      - name: タグの作成とプッシュ
+      - name: タグ名の確定
         if: steps.check_tag.outputs.tag_exists == 'false'
         run: |
           $tagToCreate = "${{ steps.decide_tag.outputs.tag_to_use }}"
           $isPrerelease = "${{ steps.decide_tag.outputs.is_prerelease }}" -eq "True"
-          
-          # タグのメッセージにプレリリース情報を含める
-          $tagMessage = "Release $tagToCreate"
-          if ($isPrerelease) {
-            $tagMessage = "Prerelease $tagToCreate"
-          }
-          
-          # 注釈付きタグを作成
-          git tag -a $tagToCreate -m "$tagMessage"
-          
-          # タグをプッシュ
-          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git $tagToCreate
-          
-          echo "タグ '$tagToCreate' を作成し、プッシュしました"
+
+          echo "使用するタグ名: $tagToCreate"
           if ($isPrerelease) {
             echo "このタグはプレリリースとして識別されます"
           }
+          echo "タグは release-exe.yml ワークフローでビルド成功後に作成されます"
       
       - name: 結果出力
         run: |
           echo "最新のタグ: ${{ steps.get_version.outputs.latest_tag }}"
-          echo "作成したタグ: ${{ steps.decide_tag.outputs.tag_to_use }}"
+          echo "使用するタグ: ${{ steps.decide_tag.outputs.tag_to_use }}"
           $isPrerelease = "${{ steps.decide_tag.outputs.is_prerelease }}" -eq "True"
           if ($isPrerelease) {
             echo "タイプ: プレリリース"
@@ -192,4 +181,5 @@ jobs:
             echo "タイプ: 正式リリース"
           }
           echo "これにより、release-exe.ymlワークフローが自動的にトリガーされます。"
+          echo "タグはビルド成功後に作成されます。"
           echo "GitHubのActionsタブでリリースビルドの進行状況を確認できます。"

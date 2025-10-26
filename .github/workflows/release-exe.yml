@@ -24,8 +24,10 @@ jobs:
       - name: チェックアウト
         uses: actions/checkout@v4
         with:
-          # 指定されたタグを使用
-          ref: ${{ inputs.tag_name }}
+          # メインブランチをチェックアウト（タグはビルド成功後に作成）
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: タグ情報の取得
         id: tag_info
@@ -75,6 +77,30 @@ jobs:
       - name: EXEビルド
         run: |
           pyinstaller WindowCaptureReading.spec
+
+      - name: Git設定
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: タグの作成とプッシュ
+        run: |
+          $tagToCreate = "${{ inputs.tag_name }}"
+          $isPrerelease = "${{ inputs.is_prerelease }}" -eq "true"
+
+          # タグのメッセージを作成
+          $tagMessage = "Release $tagToCreate"
+          if ($isPrerelease) {
+            $tagMessage = "Prerelease $tagToCreate"
+          }
+
+          # 注釈付きタグを作成
+          git tag -a $tagToCreate -m "$tagMessage"
+
+          # タグをプッシュ
+          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git $tagToCreate
+
+          echo "タグ '$tagToCreate' を作成し、プッシュしました"
 
       - name: リリース作成とEXEファイルアップロード
         uses: softprops/action-gh-release@v2
