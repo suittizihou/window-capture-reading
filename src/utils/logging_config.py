@@ -39,7 +39,10 @@ def setup_logging() -> None:
 
 def reconfigure_logging(config: "Config") -> None:
     """
-    設定に基づいてロギング設定を再構成する。
+    設定に基づいてロギング設定を構成する。
+
+    アプリケーション起動時に最初に呼び出されます。
+    既存のハンドラがあれば削除し、設定に基づいて新しいハンドラを追加します。
 
     Args:
         config: 設定オブジェクト

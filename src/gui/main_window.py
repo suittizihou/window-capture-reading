@@ -20,7 +20,6 @@ import ctypes
 from ctypes import windll
 
 from src.main import run_main_loop
-from src.utils.logging_config import setup_logging
 from src.utils.config import Config, get_config
 from src.services.window_capture import WindowCapture
 from src.services.difference_detector import DifferenceDetector
@@ -48,7 +47,6 @@ class MainWindow:
             self.logger.warning(f"DPIスケーリング設定に失敗しました: {e}")
 
         # ロガーのセットアップ
-        setup_logging()
         self.logger: logging.Logger = logging.getLogger(__name__)
 
         # ウィンドウの設定
