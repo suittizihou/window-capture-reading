@@ -37,11 +37,6 @@ class DiffCanvas(tk.Canvas):
         self.bind("<ButtonPress-1>", self._on_pan_start)
         self.bind("<B1-Motion>", self._on_pan_drag)
         self.bind("<ButtonRelease-1>", self._on_pan_end)
-        
-        # マウスホイールイベントは必要ないので削除
-        # self.bind("<MouseWheel>", self._on_mouse_wheel)
-        # self.bind("<Button-4>", self._on_mouse_wheel)
-        # self.bind("<Button-5>", self._on_mouse_wheel)
 
         # 最初は画像なしの状態
         self.clear()
