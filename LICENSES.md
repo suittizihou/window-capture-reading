@@ -9,7 +9,7 @@
 - [BSD License](#bsd-license)
 - [BSD-3-Clause](#bsd-3-clause)
 - [MIT License](#mit-license)
-- [UNKNOWN](#unknown)
+- [MIT-CMU](#mit-cmu)
 
 ## ライセンス詳細
 
@@ -47,7 +47,7 @@
 |------------|------------|-------------|
 | windows-capture | 1.5.0 | [UNKNOWN](UNKNOWN) |
 
-### UNKNOWN {#unknown} 
+### MIT-CMU {#mit-cmu} 
 
 | パッケージ | バージョン | ホームページ |
 |------------|------------|-------------|
