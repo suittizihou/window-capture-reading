@@ -5,27 +5,9 @@
 
 import tkinter as tk
 from tkinter import ttk
-from typing import (
-    Dict,
-    Any,
-    List,
-    Optional,
-    Tuple,
-    Callable,
-    cast,
-    Sequence,
-    TypeVar,
-    Generic,
-    Union,
-    Mapping,
-    MutableMapping,
-    TypedDict,
-    Iterator,
-)
+from typing import Dict, Any, List, Optional, Callable, TypedDict
 
 from src.utils.config import Config
-
-T = TypeVar("T")
 
 
 class SettingItem(TypedDict, total=False):

@@ -6,8 +6,8 @@ Windows.Graphics.Capture APIを使用して、指定されたウィンドウの�
 import logging
 import threading
 from typing import Optional, cast, Any
-import numpy as np
-from numpy.typing import NDArray
+
+from src.types import ImageArray
 
 try:
     from windows_capture import WindowsCapture, Frame, InternalCaptureControl  # type: ignore
@@ -16,9 +16,6 @@ except ImportError as e:
         "windows-captureライブラリがインストールされていません。"
         "pip install windows-capture を実行してください。"
     ) from e
-
-# 画像処理関連の型定義
-ImageArray = NDArray[np.uint8]
 
 
 class WindowCapture:

@@ -9,11 +9,9 @@ import numpy as np
 from PIL import Image
 import cv2
 from typing import Tuple, cast
-from numpy.typing import NDArray
-from src.utils.resource_path import get_sound_file_path
 
-# 画像処理関連の型定義
-ImageArray = NDArray[np.uint8]
+from src.types import ImageArray
+from src.utils.resource_path import get_sound_file_path
 
 # 表示関連定数
 MAX_TITLE_DISPLAY_LENGTH = 24  # 表示上限（全角換算で調整可）

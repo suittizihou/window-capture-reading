@@ -9,15 +9,12 @@ import time
 import numpy as np
 import cv2
 from PIL import Image
-from typing import Tuple, Optional, Dict, Any, List, cast, Union, NamedTuple
+from typing import Tuple, Optional, Dict, Any, List, cast, NamedTuple
 from numpy.typing import NDArray
 from skimage.metrics import structural_similarity
 
+from src.types import ImageArray
 from src.utils.config import Config
-
-# 画像処理関連の型定義
-# OpenCVの画像型として、複数の型が許容されるようUnion型で定義
-ImageArray = Union[NDArray[np.uint8], NDArray[Any]]
 
 
 class DiffResult(NamedTuple):
@@ -224,7 +221,7 @@ class DifferenceDetector:
                 0,       # 描画する輪郭のインデックス（0=すべて）
                 color,   # 色（BGR）
                 2        # 線の太さ
-            )  # type: ignore  # OpenCVの型定義の問題を無視
+            )
 
         return result
 

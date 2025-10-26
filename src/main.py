@@ -7,15 +7,12 @@ import logging
 import threading
 import time
 from typing import Optional, Any, List
-import numpy as np
-from numpy.typing import NDArray
+
+from src.types import ImageArray
 from src.services.window_capture import WindowCapture
 from src.services.difference_detector import DifferenceDetector
 from src.utils.config import get_config
 from src.utils.logging_config import setup_logging
-
-# 画像処理関連の型定義
-ImageArray = NDArray[np.uint8]
 
 
 def run_main_loop(
