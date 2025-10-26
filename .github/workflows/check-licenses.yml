@@ -19,25 +19,30 @@ on:
 
 jobs:
   check-licenses:
-    runs-on: ubuntu-latest
-    
+    runs-on: windows-latest
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11.7'
-        
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
+        # 実行時依存関係のみをインストール（ライセンスチェック対象）
+        if (Test-Path requirements.txt) { pip install -r requirements.txt }
+        # pip-licensesは別途インストール
         pip install pip-licenses
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         
     - name: Run license check
       run: |
         python scripts/check_licenses.py
+      env:
+        PYTHONIOENCODING: utf-8
+        PYTHONUTF8: 1
         
     - name: Upload LICENSES.md as artifact
       uses: actions/upload-artifact@v4
@@ -46,12 +51,20 @@ jobs:
         path: LICENSES.md
         
     - name: Check for license changes
+      shell: pwsh
       run: |
         git add LICENSES.md
-        if git diff --staged --quiet; then
-          echo "ライセンス情報に変更はありません。"
-        else
-          echo "::warning::ライセンス情報に変更があります。最新のライセンス情報はartifactからダウンロード可能です。"
-          echo "変更のあるライセンス:"
-          git diff --staged LICENSES.md | grep -E "^\+.*\|.*\|" | grep -v "^\+\|" || echo "詳細な変更はartifactで確認してください"
-        fi 
+        git diff --staged --quiet
+        if ($LASTEXITCODE -eq 0) {
+          Write-Output "ライセンス情報に変更はありません。"
+        } else {
+          Write-Output "::error::ライセンス情報に変更があります。LICENSES.mdを更新してコミットしてください。"
+          Write-Output ""
+          Write-Output "変更内容:"
+          git diff --staged LICENSES.md
+          Write-Output ""
+          Write-Output "詳細な変更内容はartifactからダウンロード可能です。"
+          Write-Output ""
+          Write-Output "修正方法: python scripts/check_licenses.py を実行してLICENSES.mdを更新してください"
+          exit 1
+        } 
