@@ -33,6 +33,9 @@ from src.gui.settings_dialog import show_settings_dialog
 class MainWindow:
     """メインウィンドウクラス。"""
 
+    # アプリケーション名定数
+    APP_NAME = "Window Capture Reading"
+
     def __init__(self) -> None:
         """メインウィンドウを初期化します。"""
         # 設定の読み込み
@@ -51,7 +54,7 @@ class MainWindow:
         # ウィンドウの設定
         self.root = tk.Tk()
         self.root.minsize(1200, 700)
-        self.root.title("Window Capture Reading")
+        self.root.title(self.APP_NAME)
 
         # Windows固有の設定
         if hasattr(self.root, "attributes"):
@@ -108,6 +111,9 @@ class MainWindow:
 
         # UIの作成
         self._create_ui()
+
+        # ウィンドウリストの初期化
+        self._refresh_window_list()
 
         # ウィンドウタイトルとバージョン情報の更新
         self._update_window_title()
@@ -207,10 +213,11 @@ class MainWindow:
         )
         self.window_combo.grid(row=0, column=1, sticky="ew")
         self.window_combo.bind("<<ComboboxSelected>>", self._on_window_selected)
+        self.window_combo.bind("<Button-1>", self._on_combobox_dropdown)
 
         # リフレッシュボタン
         refresh_button = ttk.Button(
-            window_frame, text="更新", command=self._refresh_and_capture
+            window_frame, text="変更", command=self._refresh_and_capture
         )
         refresh_button.grid(row=0, column=2, padx=(5, 0))
 
@@ -290,9 +297,6 @@ class MainWindow:
         self.diff_canvas = DiffCanvas(self.diff_canvas_container, bg="black")
         self.diff_canvas.grid(row=0, column=0, sticky="nsew")
 
-        # ウィンドウリストの初期化
-        self._refresh_window_list()
-
     def _refresh_window_list(self) -> None:
         """ウィンドウリストを更新します。"""
         titles = self._get_window_titles()
@@ -313,7 +317,8 @@ class MainWindow:
                     buff = ctypes.create_unicode_buffer(length + 1)
                     ctypes.windll.user32.GetWindowTextW(hwnd, buff, length + 1)
                     title = buff.value
-                    if title and title not in titles:
+                    # 自分自身のウィンドウを除外（APP_NAME定数を使用）
+                    if title and title not in titles and not title.startswith(self.APP_NAME):
                         titles.append(title)
             return True
 
@@ -326,7 +331,7 @@ class MainWindow:
 
     def _update_window_title(self) -> None:
         """ウィンドウタイトルを更新します。"""
-        title = "Window Capture Reading"
+        title = self.APP_NAME
 
         # キャプチャ対象ウィンドウタイトルを追加
         window_title = self.window_title_var.get()
@@ -359,6 +364,14 @@ class MainWindow:
         if window_title:
             self.config.window_title = window_title
             self.logger.info(f"キャプチャ対象を選択しました: {window_title}")
+
+    def _on_combobox_dropdown(self, event: tk.Event) -> None:
+        """コンボボックスクリック時にウィンドウ一覧を更新します。
+
+        Args:
+            event: イベントオブジェクト
+        """
+        self._refresh_window_list()
 
     def _on_roi_changed(self, roi: List[int]) -> None:
         """ROI変更時のコールバック。
