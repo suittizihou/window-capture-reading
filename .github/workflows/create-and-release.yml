@@ -26,9 +26,13 @@ on:
         type: boolean
         default: false
       prerelease_id:
-        description: 'プレリリース識別子（beta/alpha/rc）'
+        description: 'プレリリース識別子'
         required: false
-        type: string
+        type: choice
+        options:
+          - beta
+          - alpha
+          - rc
         default: 'beta'
 
 jobs:

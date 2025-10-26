@@ -12,7 +12,7 @@ from src.types import ImageArray
 from src.services.window_capture import WindowCapture
 from src.services.difference_detector import DifferenceDetector
 from src.utils.config import get_config
-from src.utils.logging_config import setup_logging
+from src.utils.logging_config import setup_logging, reconfigure_logging
 
 
 def run_main_loop(
@@ -88,8 +88,12 @@ def run_main_loop(
 
 def main() -> None:
     """アプリケーションのエントリーポイント。"""
-    # ロギングの設定
+    # ロギングの初期設定
     setup_logging()
+
+    # 設定を読み込み、ログ設定を再構成
+    config = get_config()
+    reconfigure_logging(config)
 
     # GUIモードで起動
     from src.gui import start_gui
