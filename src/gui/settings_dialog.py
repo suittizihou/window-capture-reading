@@ -8,6 +8,7 @@ from tkinter import ttk
 from typing import Dict, Any, List, Optional, Callable, TypedDict
 
 from src.utils.config import Config
+from src.utils.logging_config import reconfigure_logging
 
 
 class SettingItem(TypedDict, total=False):
@@ -69,6 +70,10 @@ class SettingsDialog:
         notification_tab = ttk.Frame(self.notebook)
         self.notebook.add(notification_tab, text="通知設定")
 
+        # 詳細設定タブ
+        advanced_tab = ttk.Frame(self.notebook)
+        self.notebook.add(advanced_tab, text="詳細設定")
+
         # 各タブに設定項目を追加
         basic_settings: List[SettingItem] = [
             {
@@ -117,8 +122,24 @@ class SettingsDialog:
             },
         ]
 
+        advanced_settings: List[SettingItem] = [
+            {
+                "key": "enable_log_file",
+                "label": "ログファイルを出力する",
+                "type": "bool",
+                "default": False,
+            },
+            {
+                "key": "enable_verbose_log",
+                "label": "詳細なログを出力する",
+                "type": "bool",
+                "default": False,
+            },
+        ]
+
         self.create_settings_ui(basic_tab, basic_settings)
         self.create_settings_ui(notification_tab, notification_settings)
+        self.create_settings_ui(advanced_tab, advanced_settings)
 
         # ボタンフレーム
         button_frame = ttk.Frame(self.dialog)
@@ -321,6 +342,9 @@ class SettingsDialog:
 
         # 設定をファイルに保存
         self.config.save()
+
+        # ログ設定を即座に反映
+        reconfigure_logging(self.config)
 
         # 保存コールバックを呼び出し
         if self.on_save_callback:
