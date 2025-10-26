@@ -50,6 +50,10 @@ class Config:
     # 通知設定
     notification_sound: bool = True
 
+    # ログ設定
+    enable_log_file: bool = False  # ログファイル出力の有効/無効
+    enable_verbose_log: bool = False  # 詳細ログ出力（True: DEBUG、False: WARNING）
+
     # クラス変数
     _logger: ClassVar[logging.Logger] = logging.getLogger(__name__)
 
