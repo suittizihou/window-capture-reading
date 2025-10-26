@@ -3,7 +3,6 @@
 アプリケーションのメインウィンドウを提供します。
 """
 
-import os
 import sys
 import time
 import threading
@@ -13,14 +12,13 @@ import logging
 import gc
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from typing import Dict, Any, List, Optional, Tuple, Callable, cast, Union, TypeVar
+from typing import Dict, Any, List, Optional, Tuple, Callable, cast, Union
+from pathlib import Path
 import numpy as np
 from PIL import Image, ImageTk
-from PIL.Image import Image as PILImage  # 型アノテーション用
 import ctypes
-import ctypes.wintypes
-import cv2
-from pathlib import Path
+from ctypes import windll
+
 from src.main import run_main_loop
 from src.utils.logging_config import setup_logging
 from src.utils.config import Config, get_config
@@ -30,9 +28,6 @@ from src.gui.utils import pil_to_cv, cv_to_pil, play_notification_sound, ellipsi
 from src.gui.diff_canvas import DiffCanvas
 from src.gui.preview_canvas import PreviewCanvas
 from src.gui.settings_dialog import show_settings_dialog
-from ctypes import windll
-
-T = TypeVar("T")
 
 
 class MainWindow:
