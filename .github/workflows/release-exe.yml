@@ -14,8 +14,8 @@ on:
       is_prerelease:
         description: 'プレリリースかどうか'
         required: false
-        type: string
-        default: 'false'
+        type: boolean
+        default: false
       release_commit_sha:
         description: 'リリース対象のコミットSHA'
         required: true
@@ -38,7 +38,7 @@ jobs:
         run: |
           # タグ名を取得
           $tag = "${{ inputs.tag_name }}"
-          $isPrerelease = "${{ inputs.is_prerelease }}" -eq "true"
+          $isPrerelease = [System.Convert]::ToBoolean("${{ inputs.is_prerelease }}")
           
           echo "tag_name=$tag" >> $env:GITHUB_OUTPUT
           echo "is_prerelease=$isPrerelease" >> $env:GITHUB_OUTPUT
@@ -90,7 +90,7 @@ jobs:
       - name: タグの作成とプッシュ
         run: |
           $tagToCreate = "${{ inputs.tag_name }}"
-          $isPrerelease = "${{ inputs.is_prerelease }}" -eq "true"
+          $isPrerelease = [System.Convert]::ToBoolean("${{ inputs.is_prerelease }}")
           $commitSha = "${{ inputs.release_commit_sha }}"
 
           # タグのメッセージを作成
@@ -113,7 +113,7 @@ jobs:
           tag_name: ${{ steps.tag_info.outputs.tag_name }}
           name: Release ${{ steps.tag_info.outputs.tag_name }}
           draft: false
-          prerelease: ${{ steps.tag_info.outputs.is_prerelease == 'True' }}
+          prerelease: ${{ steps.tag_info.outputs.is_prerelease }}
           files: dist/WindowCaptureReading.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

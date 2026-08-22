@@ -16,8 +16,8 @@ on:
       prerelease:
         description: 'プレリリースとして作成'
         required: false
-        type: string
-        default: 'false'
+        type: boolean
+        default: false
       prerelease_id:
         description: 'プレリリース識別子（beta/alpha/rc）'
         required: false
@@ -42,7 +42,7 @@ jobs:
     environment: release
     outputs:
       tag_name: ${{ steps.get_version.outputs.new_tag }}
-      is_prerelease: ${{ steps.get_version.outputs.is_prerelease  }}
+      is_prerelease: ${{ steps.get_version.outputs.is_prerelease }}
       release_commit_sha: ${{ steps.update_version.outputs.commit_sha }}
     steps:
       - name: リポジトリのチェックアウト
@@ -93,7 +93,7 @@ jobs:
           }
 
           # プレリリース指定がある場合は識別子を付与
-          $isPrerelease = "${{ inputs.prerelease }}" -eq "true"
+          $isPrerelease = [System.Convert]::ToBoolean("${{ inputs.prerelease }}")
 
           if ($isPrerelease) {
             $prelId = "${{ inputs.prerelease_id }}"
