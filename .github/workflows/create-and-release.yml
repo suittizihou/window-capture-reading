@@ -16,10 +16,6 @@ on:
           - minor
           - patch
         default: 'patch'
-      custom_tag:
-        description: '独自タグ名（空白の場合は自動生成されます）'
-        required: false
-        type: string
       prerelease:
         description: 'プレリリースとして作成'
         required: false
@@ -68,7 +64,6 @@ jobs:
     uses: ./.github/workflows/create-release-tag.yml
     with:
       tag_increment: ${{ github.event.inputs.tag_increment }}
-      custom_tag: ${{ github.event.inputs.custom_tag }}
       prerelease: '${{ github.event.inputs.prerelease }}'
       prerelease_id: ${{ github.event.inputs.prerelease_id }}
     secrets: inherit
@@ -81,4 +76,5 @@ jobs:
     with:
       tag_name: ${{ needs.create-tag.outputs.tag_name }}
       is_prerelease: '${{ needs.create-tag.outputs.is_prerelease }}'
+      release_commit_sha: ${{ needs.create-tag.outputs.release_commit_sha }}
     secrets: inherit 
