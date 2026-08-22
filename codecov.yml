@@ -7,7 +7,7 @@ coverage:
   status:
     project:
       default:
-        # カバレッジの閾値を下げる（実際のハードウェア依存テストは除外されるため）
+        # Lower coverage target because hardware-dependent tests are excluded.
         target: 50%
         threshold: 5%
     patch:
@@ -16,6 +16,6 @@ coverage:
         threshold: 5%
 
 ignore:
-  # 画面キャプチャと外部システム依存のコードを除外
+  # Exclude screen capture and external-system-dependent code.
   - "src/main.py"
   - "src/services/window_capture.py"
