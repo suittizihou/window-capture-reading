@@ -16,6 +16,10 @@ on:
         required: false
         type: string
         default: 'false'
+      release_commit_sha:
+        description: 'リリース対象のコミットSHA'
+        required: true
+        type: string
 
 jobs:
   build-and-release:
@@ -25,7 +29,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           # メインブランチをチェックアウト（タグはビルド成功後に作成）
-          ref: main
+          ref: ${{ inputs.release_commit_sha }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -87,6 +91,7 @@ jobs:
         run: |
           $tagToCreate = "${{ inputs.tag_name }}"
           $isPrerelease = "${{ inputs.is_prerelease }}" -eq "true"
+          $commitSha = "${{ inputs.release_commit_sha }}"
 
           # タグのメッセージを作成
           $tagMessage = "Release $tagToCreate"
@@ -95,12 +100,12 @@ jobs:
           }
 
           # 注釈付きタグを作成
-          git tag -a $tagToCreate -m "$tagMessage"
+          git tag -a $tagToCreate $commitSha -m "$tagMessage"
 
           # タグをプッシュ
-          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git $tagToCreate
+          git push origin $tagToCreate
 
-          echo "タグ '$tagToCreate' を作成し、プッシュしました"
+          echo "タグ '$tagToCreate' をコミット '$commitSha' に作成し、プッシュしました"
 
       - name: リリース作成とEXEファイルアップロード
         uses: softprops/action-gh-release@v2
