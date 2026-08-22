@@ -75,6 +75,6 @@ jobs:
     uses: ./.github/workflows/release-exe.yml
     with:
       tag_name: ${{ needs.create-tag.outputs.tag_name }}
-      is_prerelease: ${{ needs.create-tag.outputs.is_prerelease }}
+      is_prerelease: ${{ fromJson(needs.create-tag.outputs.is_prerelease) }}
       release_commit_sha: ${{ needs.create-tag.outputs.release_commit_sha }}
     secrets: inherit 
