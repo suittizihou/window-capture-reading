@@ -42,11 +42,27 @@ jobs:
       run: |
         (Get-Content coverage.xml) -replace '<\?xml version="1.0" \?>', '<?xml version="1.0" encoding="UTF-8"?>' | Set-Content coverage.xml -Encoding UTF8
 
-    - name: Upload coverage to Codecov
+    - name: Upload coverage to Codecov (PR)
+      if: github.event_name == 'pull_request'
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: ./coverage.xml
+        disable_search: true
+        override_commit: ${{ github.event.pull_request.head.sha }}
+        override_pr: ${{ github.event.pull_request.number }}
+        fail_ci_if_error: false
+      env:
+        PYTHONIOENCODING: utf-8
+        PYTHONUTF8: 1
+
+    - name: Upload coverage to Codecov (Push)
+      if: github.event_name != 'pull_request'
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage.xml
+        disable_search: true
         fail_ci_if_error: false
       env:
         PYTHONIOENCODING: utf-8
