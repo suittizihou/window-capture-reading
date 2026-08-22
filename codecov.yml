@@ -15,6 +15,13 @@ coverage:
         target: 50%
         threshold: 5%
 
+comment:
+  layout: "diff, files"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+
 ignore:
   # Exclude screen capture and external-system-dependent code.
   - "src/main.py"
