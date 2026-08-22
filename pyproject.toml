@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "window-capture-reading"
-version = "2.3.3"
+version = "2.3.4"
 description = "ウィンドウの画面変化を検出し通知音を出力するツール"
 readme = "README.md"
 authors = [
@@ -50,4 +50,5 @@ include = '\.pyi?$'
 [tool.isort]
 profile = "black"
 multi_line_output = 3 
+
 
