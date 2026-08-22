@@ -63,9 +63,9 @@ jobs:
     needs: [check-permissions, quality-check, check-licenses]
     uses: ./.github/workflows/create-release-tag.yml
     with:
-      tag_increment: ${{ github.event.inputs.tag_increment }}
-      prerelease: '${{ github.event.inputs.prerelease }}'
-      prerelease_id: ${{ github.event.inputs.prerelease_id }}
+      tag_increment: ${{ inputs.tag_increment }}
+      prerelease: ${{ inputs.prerelease }}
+      prerelease_id: ${{ inputs.prerelease_id }}
     secrets: inherit
 
   # EXEのビルドとリリース - 既存のワークフローを呼び出し
@@ -75,6 +75,6 @@ jobs:
     uses: ./.github/workflows/release-exe.yml
     with:
       tag_name: ${{ needs.create-tag.outputs.tag_name }}
-      is_prerelease: '${{ needs.create-tag.outputs.is_prerelease }}'
+      is_prerelease: ${{ needs.create-tag.outputs.is_prerelease }}
       release_commit_sha: ${{ needs.create-tag.outputs.release_commit_sha }}
     secrets: inherit 
