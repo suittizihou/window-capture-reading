@@ -38,7 +38,7 @@ jobs:
     environment: release # 環境制限を適用
     steps:
       - name: チェックアウト
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         
       - name: 権限チェック
         uses: ./.github/actions/check-permissions

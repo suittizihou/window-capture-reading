@@ -26,7 +26,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: チェックアウト
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # メインブランチをチェックアウト（タグはビルド成功後に作成）
           ref: ${{ inputs.release_commit_sha }}
@@ -44,7 +44,7 @@ jobs:
           echo "is_prerelease=$isPrerelease" >> $env:GITHUB_OUTPUT
           
       - name: Pythonセットアップ
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11.7'
 
