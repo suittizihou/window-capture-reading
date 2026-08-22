@@ -5,8 +5,9 @@
 ## 目次
 
 - [Apache Software License](#apache-software-license)
-- [Apache Software License; BSD License](#apache-software-license;-bsd-license)
+- [Apache-2.0 OR BSD-2-Clause](#apache-20-or-bsd-2-clause)
 - [BSD License](#bsd-license)
+- [BSD-2-Clause](#bsd-2-clause)
 - [BSD-3-Clause](#bsd-3-clause)
 - [MIT License](#mit-license)
 - [MIT-CMU](#mit-cmu)
@@ -19,27 +20,33 @@
 |------------|------------|-------------|
 | opencv-python | 4.11.0.86 | [https://github.com/opencv/opencv-python](https://github.com/opencv/opencv-python) |
 
-### Apache Software License; BSD License {#apache-software-license;-bsd-license} 
+### Apache-2.0 OR BSD-2-Clause {#apache-20-or-bsd-2-clause} 
 
 | パッケージ | バージョン | ホームページ |
 |------------|------------|-------------|
-| packaging | 25.0 | [https://github.com/pypa/packaging](https://github.com/pypa/packaging) |
+| packaging | 26.3 | [https://github.com/pypa/packaging](https://github.com/pypa/packaging) |
 
 ### BSD License {#bsd-license} 
 
 | パッケージ | バージョン | ホームページ |
 |------------|------------|-------------|
-| imageio | 2.37.0 | [https://github.com/imageio/imageio](https://github.com/imageio/imageio) |
-| networkx | 3.5 | [https://networkx.org/](https://networkx.org/) |
 | numpy | 1.26.4 | [https://numpy.org](https://numpy.org) |
 | scikit-image | 0.25.2 | [https://scikit-image.org](https://scikit-image.org) |
-| scipy | 1.16.2 | [https://scipy.org/](https://scipy.org/) |
+| scipy | 1.17.1 | [https://scipy.org/](https://scipy.org/) |
+
+### BSD-2-Clause {#bsd-2-clause} 
+
+| パッケージ | バージョン | ホームページ |
+|------------|------------|-------------|
+| ImageIO | 2.37.4 | [https://github.com/imageio/imageio](https://github.com/imageio/imageio) |
 
 ### BSD-3-Clause {#bsd-3-clause} 
 
 | パッケージ | バージョン | ホームページ |
 |------------|------------|-------------|
-| tifffile | 2025.10.16 | [https://www.cgohlke.com](https://www.cgohlke.com) |
+| lazy-loader | 0.5 | [https://github.com/scientific-python/lazy-loader](https://github.com/scientific-python/lazy-loader) |
+| networkx | 3.6.1 | [https://networkx.org/](https://networkx.org/) |
+| tifffile | 2026.3.3 | [https://www.cgohlke.com](https://www.cgohlke.com) |
 
 ### MIT License {#mit-license} 
 
